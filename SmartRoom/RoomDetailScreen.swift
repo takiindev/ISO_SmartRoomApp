@@ -326,19 +326,17 @@ struct RoomDetailScreen: View {
     }
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                AppColors.appBackground.ignoresSafeArea()
-                
-                if viewModel.uiState.isLoading {
-                    RoomDetailLoadingView()
-                } else if let errorMessage = viewModel.uiState.errorMessage {
-                    RoomDetailErrorView(message: errorMessage) {
-                        viewModel.loadData()
-                    }
-                } else {
-                    mainContent
+        ZStack {
+            AppColors.appBackground.ignoresSafeArea()
+            
+            if viewModel.uiState.isLoading {
+                RoomDetailLoadingView()
+            } else if let errorMessage = viewModel.uiState.errorMessage {
+                RoomDetailErrorView(message: errorMessage) {
+                    viewModel.loadData()
                 }
+            } else {
+                mainContent
             }
         }
         .navigationBarHidden(true)
@@ -407,14 +405,26 @@ struct RoomDetailScreen: View {
                 .foregroundColor(AppColors.textPrimary)
             
             HStack(spacing: 16) {
-                NavDetailCard(
-                    title: "Climate",
-                    icon: "thermometer",
-                    color: AppColors.accentPink,
-                    onClick: {
-                        print("Navigate to climate chart")
+                NavigationLink(destination: TemperatureScreen(room: room)) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "thermometer")
+                            .font(.system(size: 32))
+                            .foregroundColor(AppColors.accentPink)
+                        
+                        Text("Climate")
+                            .font(AppTypography.bodyMedium)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.textPrimary)
                     }
-                )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 100)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(AppColors.surfaceWhite)
+                            .shadow(color: AppColors.textSecondary.opacity(0.1), radius: 6, x: 0, y: 3)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
                 
                 NavDetailCard(
                     title: "Power",

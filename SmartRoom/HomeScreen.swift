@@ -17,95 +17,94 @@ struct HomeScreen: View {
     @State private var allRooms: [Room] = []
     
     var body: some View {
-        NavigationView {
-            GeometryReader { geometry in
-                ZStack {
-                    AppColors.appBackground.ignoresSafeArea()
+        ZStack {
+            AppColors.appBackground.ignoresSafeArea(.all)
+            
+            VStack(spacing: 0) {
+                // ======================
+                // TOP BAR HEADER  
+                // ======================
+                HStack {
+                    Text("My Home")
+                        .font(AppTypography.headlineMedium)
+                        .foregroundColor(AppColors.textPrimary)
                     
-                    VStack(spacing: 0) {
-                        // ======================
-                        // TOP BAR HEADER
-                        // ======================
-                        HStack {
-                            Text("My Home")
-                                .font(AppTypography.headlineMedium)
-                                .foregroundColor(AppColors.textPrimary)
+                    Spacer()
+                    
+                    Button {
+                        TokenManager.shared.logout()
+                        onLogout()
+                    } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.title2)
+                            .foregroundColor(AppColors.textPrimary)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity)
+                .background(AppColors.appBackground)
+                
+                ScrollView {
+                        LazyVStack(spacing: 20) {
                             
-                            Spacer()
+                            HeroWeatherCard()
+                                .padding(.top, 20)
                             
-                            Button {
-                                TokenManager.shared.logout()
-                                onLogout()
-                            } label: {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
-                                    .font(.title2)
-                                    .foregroundColor(AppColors.textPrimary)
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.top, geometry.safeAreaInsets.top + 8)
-                        .padding(.bottom, 8)
-                        .frame(maxWidth: .infinity)
-                        .background(AppColors.appBackground)
-                        
-                        ScrollView {
-                            LazyVStack(spacing: 24) {
-                                
-                                HeroWeatherCard()
-                                    .padding(.top, 16)
-                                
-                                SmartModesSection(activeMode: $activeMode)
-                                
-                                SegmentedControlView(selectedTab: $selectedTab)
-                                
-                                if isLoading && floors.isEmpty {
-                                    LoadingView()
-                                } else if let error = errorMessage {
-                                    ErrorView(message: error) {
-                                        retry()
-                                    }
-                                } else if selectedTab == 0 {
-                                    VStack(spacing: 16) {
-                                        DebugInfoView(
-                                            floors: floors,
-                                            rooms: allRooms,
-                                            isLoading: isLoading
-                                        )
-                                        
-                                        if floors.isEmpty {
-                                            EmptyFloorsView()
-                                        } else {
-                                            ForEach(floors) { floor in
-                                                let roomsInFloor = getRoomsForFloor(floor.id)
-                                                FloorSectionView(
-                                                    floorName: "\(floor.name) • \(roomsInFloor.count) phòng",
-                                                    rooms: roomsInFloor
-                                                )
-                                            }
+                            SmartModesSection(activeMode: $activeMode)
+                                .padding(.vertical, 4)
+                            
+                            SegmentedControlView(selectedTab: $selectedTab)
+                                .padding(.vertical, 4)
+                            
+                            if isLoading && floors.isEmpty {
+                                LoadingView()
+                            } else if let error = errorMessage {
+                                ErrorView(message: error) {
+                                    retry()
+                                }
+                            } else if selectedTab == 0 {
+                                VStack(spacing: 16) {
+                                    DebugInfoView(
+                                        floors: floors,
+                                        rooms: allRooms,
+                                        isLoading: isLoading
+                                    )
+                                    
+                                    if floors.isEmpty {
+                                        EmptyFloorsView()
+                                    } else {
+                                        ForEach(floors) { floor in
+                                            let roomsInFloor = getRoomsForFloor(floor.id)
+                                            FloorSectionView(
+                                                floorName: "\(floor.name) • \(roomsInFloor.count) phòng",
+                                                rooms: roomsInFloor
+                                            )
                                         }
                                     }
-                                } else {
-                                    DevicesView()
                                 }
-                                
-                                // API TEST SECTION
-                                APITestSection(
-                                    apiResponse: apiTestResponse,
-                                    isTesting: isTestingAPI,
-                                    onTestAPI: {
-                                        testFloorsAPI()
-                                    }
-                                )
+                            } else {
+                                DevicesView()
                             }
-                            .padding(.horizontal, 24)
-                            .padding(.bottom, geometry.safeAreaInsets.bottom + 16)
+                            
+                            // API TEST SECTION
+                            APITestSection(
+                                apiResponse: apiTestResponse,
+                                isTesting: isTestingAPI,
+                                onTestAPI: {
+                                    testFloorsAPI()
+                                }
+                            )
+                            .padding(.top, 12)
                         }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 30)
+                        .padding(.bottom, 20)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .navigationBarHidden(true) // Ẩn nav bar mặc định
-        }
         .onAppear {
             loadFloorsAndRooms()
         }
@@ -642,7 +641,10 @@ struct APITestSection: View {
 
 // MARK: - Preview
 #Preview {
-    HomeScreen(onLogout: {
-        print("Logout in preview")
-    })
+    NavigationView {
+        HomeScreen(onLogout: {
+            print("Logout in preview")
+        })
+    }
+    .navigationViewStyle(StackNavigationViewStyle())
 }
