@@ -258,10 +258,49 @@ final class SmartRoomAPIService {
         let response = try JSONDecoder().decode(APIResponse<[TemperatureHistoryPoint]>.self, from: data)
         return response.data
     }
+    
+    // MARK: - Power Consumption Sensors
+    func getPowerSensorsByRoom(_ roomId: Int, page: Int = 0, size: Int = 50) async throws -> [PowerSensor] {
+        let url = makeURL("/rooms/\(roomId)/power-consumptions?page=\(page)&size=\(size)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<PaginatedData<PowerSensor>>.self, from: data)
+        return response.data.content
+    }
+    
+    func getRawPowerSensorsByRoom(_ roomId: Int, page: Int = 0, size: Int = 50) async throws -> String {
+        let url = makeURL("/rooms/\(roomId)/power-consumptions?page=\(page)&size=\(size)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        return String(data: data, encoding: .utf8) ?? "{}"
+    }
+    
+    // MARK: - Power Consumption History
+    func getPowerConsumptionHistory(roomId: Int, from: String, to: String) async throws -> [PowerHistoryPoint] {
+        let url = makeURL("/rooms/\(roomId)/power-consumption-values/sum?from=\(from)&to=\(to)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[PowerHistoryPoint]>.self, from: data)
+        return response.data
+    }
 }
 
 // MARK: - Temperature History Model
 struct TemperatureHistoryPoint: Codable {
     let timestamp: String  // ISO8601 format from API
     let avgTempC: Double
+}
+
+// MARK: - Power Consumption Models
+struct PowerSensor: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let description: String?
+    let isActive: Bool
+    let currentWatt: Double?
+    let currentWattHour: Double?
+    let naturalId: String
+    let roomId: Int
+}
+
+struct PowerHistoryPoint: Codable {
+    let timestamp: String  // ISO8601 format from API
+    let sumWatt: Double
 }

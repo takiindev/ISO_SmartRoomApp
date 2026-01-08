@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Get Power Consumptions</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 40px auto;
+    }
+    input, button {
+      width: 100%;
+      padding: 8px;
+      margin: 6px 0;
+    }
+    button {
+      background: #2d8cff;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    pre {
+      background: #111;
+      color: #0f0;
+      padding: 12px;
+      max-height: 350px;
+      overflow: auto;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>⚡ Danh sách cảm biến tiêu thụ điện theo phòng</h2>
+
+<label>Username</label>
+<input id="username" value="admin">
+
+<label>Password</label>
+<input id="password" type="password" value="smartroom">
+
+<label>Room ID</label>
+<input id="roomId" value="1">
+
+<label>Trang (page)</label>
+<input id="page" value="0">
+
+<label>Số phần tử/trang (size)</label>
+<input id="size" value="20">
+
+<button onclick="run()">🚀 Login & Get Power Sensors</button>
+
+<h3>Kết quả</h3>
+<pre id="output">Chưa có dữ liệu</pre>
+
+<script>
+const BASE_URL = "http://192.168.2.29:8080/api/v1";
+
+// ===== LOGIN =====
+async function login(username, password) {
+  const res = await fetch(`${BASE_URL}/auth/signin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+
+  if (!res.ok) {
+    throw new Error("Login failed: " + res.status);
+  }
+
+  const json = await res.json();
+  return json.data.token;
+}
+
+// ===== FETCH WITH AUTH =====
+async function fetchWithAuth(url, token) {
+  const res = await fetch(url, {
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+
+  if (!res.ok) {
+    throw new Error("API error: " + res.status);
+  }
+
+  return res.json();
+}
+
+// ===== MAIN =====
+async function run() {
+  const output = document.getElementById("output");
+  output.textContent = "⏳ Đang xử lý...";
+
+  try {
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+    const roomId   = document.getElementById("roomId").value.trim();
+    const page     = document.getElementById("page").value.trim();
+    const size     = document.getElementById("size").value.trim();
+
+    if (!roomId) throw new Error("Room ID không được để trống");
+
+    // 1️⃣ Login
+    const token = await login(username, password);
+
+    // 2️⃣ Get power consumptions
+    const url =
+      `${BASE_URL}/rooms/${roomId}/power-consumptions` +
+      `?page=${page}&size=${size}`;
+
+    const res = await fetchWithAuth(url, token);
+
+    /**
+     * res.data =
+     * {
+     *   content: [ ... sensor list ... ],
+     *   page, size, totalElements, totalPages
+     * }
+     */
+    output.textContent = JSON.stringify(res.data, null, 2);
+
+  } catch (err) {
+    output.textContent = "❌ " + err.message;
+    console.error(err);
+  }
+}
+</script>
+
+</body>
+</html>

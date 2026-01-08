@@ -286,14 +286,26 @@ struct RoomDetailScreen: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 
-                NavDetailCard(
-                    title: "Power",
-                    icon: "bolt.fill",
-                    color: AppColors.primaryPurple,
-                    onClick: {
-                        print("Navigate to power chart")
+                NavigationLink(destination: PowerScreen(room: room)) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(AppColors.primaryPurple)
+                        
+                        Text("Power")
+                            .font(AppTypography.bodyMedium)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppColors.textPrimary)
                     }
-                )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 100)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(AppColors.surfaceWhite)
+                            .shadow(color: AppColors.textSecondary.opacity(0.1), radius: 6, x: 0, y: 3)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
     }
