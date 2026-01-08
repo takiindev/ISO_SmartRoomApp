@@ -1,10 +1,10 @@
 import SwiftUI
 import Charts
 
-struct TemperatureScreen: View {
+struct PowerScreen: View {
     let room: Room
     
-    @StateObject private var viewModel = TemperatureViewModel()
+    @StateObject private var viewModel = PowerViewModel()
     @State private var startDate = Date().addingTimeInterval(-7 * 24 * 60 * 60) // 7 days ago
     @State private var endDate = Date()
     @Environment(\.dismiss) private var dismiss
@@ -43,18 +43,18 @@ struct TemperatureScreen: View {
                     LazyVStack(spacing: 20) {
                         
                         // Date Range Selector
-                        GlassCard {
-                            DateRangeSelector(
+                        PowerGlassCard {
+                            PowerDateRangeSelector(
                                 startDate: $startDate,
                                 endDate: $endDate
                             )
                         }
                         .padding(.top, 20)
                         
-                        // Temperature Chart
-                        GlassCard(borderColor: AppColors.accentPink) {
-                            TemperatureChart(
-                                title: "Biểu đồ nhiệt độ",
+                        // Power Chart
+                        PowerGlassCard(borderColor: AppColors.primaryPurple) {
+                            PowerChart(
+                                title: "Biểu đồ tiêu thụ điện",
                                 sensors: viewModel.sensors,
                                 selectedSensorIds: viewModel.selectedSensorIds,
                                 isLoading: viewModel.isChartLoading,
@@ -105,7 +105,7 @@ struct TemperatureScreen: View {
                                 .padding(.vertical, 32)
                             } else if viewModel.sensors.isEmpty {
                                 VStack(spacing: 12) {
-                                    Image(systemName: "thermometer.slash")
+                                    Image(systemName: "bolt.slash")
                                         .font(.largeTitle)
                                         .foregroundColor(AppColors.textSecondary)
                                     
@@ -117,7 +117,7 @@ struct TemperatureScreen: View {
                                 .padding(.vertical, 32)
                             } else {
                                 ForEach(Array(viewModel.sensors.enumerated()), id: \.element.id) { index, sensor in
-                                    TemperatureSensorRow(
+                                    PowerSensorRow(
                                         sensor: sensor,
                                         colorIndex: index,
                                         isSelected: viewModel.selectedSensorIds.contains(sensor.id),
@@ -151,19 +151,50 @@ struct TemperatureScreen: View {
                             .padding(.horizontal, 24)
                             
                             if viewModel.showDebugInfo {
-                                ScrollView(.horizontal, showsIndicators: true) {
-                                    Text(viewModel.debugAPIResponse)
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .foregroundColor(AppColors.textPrimary)
-                                        .padding(12)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                // Sensors API Response
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("GET /rooms/\(room.id)/power-consumptions")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.textSecondary)
+                                        .padding(.horizontal, 24)
+                                    
+                                    ScrollView(.horizontal, showsIndicators: true) {
+                                        Text(viewModel.debugSensorsResponse)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(AppColors.textPrimary)
+                                            .padding(12)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .frame(maxHeight: 200)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.black.opacity(0.05))
+                                    )
+                                    .padding(.horizontal, 24)
                                 }
-                                .frame(maxHeight: 300)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.black.opacity(0.05))
-                                )
-                                .padding(.horizontal, 24)
+                                
+                                // Chart Data API Response
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("GET /rooms/\(room.id)/power-consumption-values/sum")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.textSecondary)
+                                        .padding(.horizontal, 24)
+                                        .padding(.top, 12)
+                                    
+                                    ScrollView(.horizontal, showsIndicators: true) {
+                                        Text(viewModel.debugAPIResponse)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(AppColors.textPrimary)
+                                            .padding(12)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .frame(maxHeight: 200)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.black.opacity(0.05))
+                                    )
+                                    .padding(.horizontal, 24)
+                                }
                             }
                         }
                         
@@ -192,7 +223,7 @@ struct TemperatureScreen: View {
 }
 
 // MARK: - Glass Card
-struct GlassCard<Content: View>: View {
+struct PowerGlassCard<Content: View>: View {
     let borderColor: Color?
     let content: Content
     
@@ -214,7 +245,7 @@ struct GlassCard<Content: View>: View {
 }
 
 // MARK: - Date Range Selector
-struct DateRangeSelector: View {
+struct PowerDateRangeSelector: View {
     @Binding var startDate: Date
     @Binding var endDate: Date
     
@@ -227,12 +258,6 @@ struct DateRangeSelector: View {
         return formatter
     }
     
-    private var shortDateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd/MM"
-        return formatter
-    }
-    
     var body: some View {
         VStack(spacing: 20) {
             Text("Chọn khoảng thời gian")
@@ -241,7 +266,7 @@ struct DateRangeSelector: View {
             
             HStack(spacing: 12) {
                 // Start Date Button
-                DateButton(
+                PowerDateButton(
                     label: "Từ ngày",
                     date: startDate,
                     formatter: dateFormatter,
@@ -257,7 +282,7 @@ struct DateRangeSelector: View {
                     .frame(width: 30)
                 
                 // End Date Button
-                DateButton(
+                PowerDateButton(
                     label: "Đến ngày",
                     date: endDate,
                     formatter: dateFormatter,
@@ -317,7 +342,7 @@ struct DateRangeSelector: View {
 }
 
 // MARK: - Date Button Component
-struct DateButton: View {
+struct PowerDateButton: View {
     let label: String
     let date: Date
     let formatter: DateFormatter
@@ -370,19 +395,19 @@ struct DateButton: View {
     }
 }
 
-// MARK: - Temperature Chart
-struct TemperatureChart: View {
+// MARK: - Power Chart
+struct PowerChart: View {
     let title: String
-    let sensors: [TemperatureSensor]
+    let sensors: [PowerSensor]
     let selectedSensorIds: Set<Int>
     let isLoading: Bool
-    let chartData: [TemperatureChartDataPoint]
+    let chartData: [PowerChartDataPoint]
     
-    private var selectedSensors: [TemperatureSensor] {
+    private var selectedSensors: [PowerSensor] {
         sensors.filter { selectedSensorIds.contains($0.id) }
     }
     
-    private var filteredChartData: [TemperatureChartDataPoint] {
+    private var filteredChartData: [PowerChartDataPoint] {
         chartData.filter { selectedSensorIds.contains($0.sensorId) }
     }
     
@@ -401,21 +426,21 @@ struct TemperatureChart: View {
     }
     
     @ChartContentBuilder
-    private func sensorChartContent(sensor: TemperatureSensor, index: Int) -> some ChartContent {
+    private func sensorChartContent(sensor: PowerSensor, index: Int) -> some ChartContent {
         let sensorData = filteredChartData.filter { $0.sensorId == sensor.id }
-        let color = getChartColor(index: index)
+        let color = getPowerChartColor(index: index)
         
         ForEach(sensorData) { dataPoint in
             LineMark(
                 x: .value("Thời gian", dataPoint.timestamp),
-                y: .value("Nhiệt độ", dataPoint.temperature)
+                y: .value("Công suất", dataPoint.watt)
             )
             .foregroundStyle(color)
             .interpolationMethod(.catmullRom)
             
             PointMark(
                 x: .value("Thời gian", dataPoint.timestamp),
-                y: .value("Nhiệt độ", dataPoint.temperature)
+                y: .value("Công suất", dataPoint.watt)
             )
             .foregroundStyle(color)
             .symbol(.circle)
@@ -481,8 +506,8 @@ struct TemperatureChart: View {
             AxisMarks(position: .leading) { value in
                 AxisGridLine()
                 AxisValueLabel {
-                    if let temp = value.as(Double.self) {
-                        Text("\(temp, specifier: "%.0f")°C")
+                    if let watt = value.as(Double.self) {
+                        Text("\(watt, specifier: "%.0f")W")
                             .font(.caption)
                     }
                 }
@@ -497,15 +522,15 @@ struct TemperatureChart: View {
     }
 }
 
-// MARK: - Temperature Sensor Row
-struct TemperatureSensorRow: View {
-    let sensor: TemperatureSensor
+// MARK: - Power Sensor Row
+struct PowerSensorRow: View {
+    let sensor: PowerSensor
     let colorIndex: Int
     let isSelected: Bool
     let onSelectionChanged: (Int, Bool) -> Void
     
     private var sensorColor: Color {
-        getChartColor(index: colorIndex)
+        getPowerChartColor(index: colorIndex)
     }
     
     var body: some View {
@@ -523,7 +548,7 @@ struct TemperatureSensorRow: View {
                         )
                         .frame(width: 48, height: 48)
                     
-                    Image(systemName: "thermometer")
+                    Image(systemName: "bolt.fill")
                         .font(.title2)
                         .foregroundColor(.white)
                 }
@@ -542,15 +567,21 @@ struct TemperatureSensorRow: View {
                             .frame(width: 8, height: 8)
                     }
                     
-                    if let temp = sensor.currentValue {
-                        Text("\(temp, specifier: "%.1f")°C")
+                    if let watt = sensor.currentWatt {
+                        Text("\(watt, specifier: "%.1f")W")
                             .font(AppTypography.titleMedium)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.textPrimary)
                     } else {
-                        Text("—°C")
+                        Text("—W")
                             .font(AppTypography.titleMedium)
                             .fontWeight(.bold)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                    
+                    if let wattHour = sensor.currentWattHour {
+                        Text("\(wattHour, specifier: "%.1f")Wh")
+                            .font(.caption)
                             .foregroundColor(AppColors.textSecondary)
                     }
                 }
@@ -574,7 +605,7 @@ struct TemperatureSensorRow: View {
 }
 
 // MARK: - Helper Functions
-func getChartColor(index: Int) -> Color {
+func getPowerChartColor(index: Int) -> Color {
     let colors: [Color] = [
         Color(red: 0.9, green: 0.22, blue: 0.27), // #E63946
         Color(red: 0.27, green: 0.48, blue: 0.62), // #457B9D
@@ -586,43 +617,33 @@ func getChartColor(index: Int) -> Color {
     return colors[index % colors.count]
 }
 
-// MARK: - Temperature Sensor Model
-struct TemperatureSensor: Identifiable, Codable {
-    let id: Int
-    let name: String
-    let description: String?
-    let isActive: Bool
-    let currentValue: Double?
-    let naturalId: String
-    let roomId: Int
-}
-
-// MARK: - Temperature Chart Data Point
-struct TemperatureChartDataPoint: Identifiable, Codable {
+// MARK: - Power Chart Data Point
+struct PowerChartDataPoint: Identifiable, Codable {
     let id: UUID
     let sensorId: Int
     let sensorName: String
-    let temperature: Double
+    let watt: Double
     let timestamp: Date
     
-    init(id: UUID = UUID(), sensorId: Int, sensorName: String, temperature: Double, timestamp: Date) {
+    init(id: UUID = UUID(), sensorId: Int, sensorName: String, watt: Double, timestamp: Date) {
         self.id = id
         self.sensorId = sensorId
         self.sensorName = sensorName
-        self.temperature = temperature
+        self.watt = watt
         self.timestamp = timestamp
     }
 }
 
-// MARK: - Temperature ViewModel
-class TemperatureViewModel: ObservableObject {
-    @Published var sensors: [TemperatureSensor] = []
+// MARK: - Power ViewModel
+class PowerViewModel: ObservableObject {
+    @Published var sensors: [PowerSensor] = []
     @Published var selectedSensorIds: Set<Int> = []
-    @Published var chartData: [TemperatureChartDataPoint] = []
+    @Published var chartData: [PowerChartDataPoint] = []
     @Published var isLoading: Bool = false
     @Published var isChartLoading: Bool = false
     @Published var errorMessage: String? = nil
     @Published var debugAPIResponse: String = "Chưa có dữ liệu"
+    @Published var debugSensorsResponse: String = "Chưa có dữ liệu"
     @Published var showDebugInfo: Bool = false
     
     func loadSensors(for roomId: Int) {
@@ -637,15 +658,32 @@ class TemperatureViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            // Gọi API thật để lấy danh sách cảm biến nhiệt độ
-            let loadedSensors = try await SmartRoomAPIService.shared.getTemperatureSensorsByRoom(roomId)
+            print("📡 Calling API: /rooms/\(roomId)/power-consumptions")
+            
+            // Gọi API thật để lấy danh sách cảm biến công suất
+            let loadedSensors = try await SmartRoomAPIService.shared.getPowerSensorsByRoom(roomId)
+            
+            // Get raw API response for debug
+            do {
+                let rawResponse = try await SmartRoomAPIService.shared.getRawPowerSensorsByRoom(roomId)
+                debugSensorsResponse = rawResponse
+            } catch {
+                debugSensorsResponse = "Error getting raw response: \(error.localizedDescription)"
+            }
             
             sensors = loadedSensors
             // Tự động chọn tất cả sensors khi load
             selectedSensorIds = Set(sensors.map { $0.id })
             isLoading = false
             
-            print("✅ Loaded \(sensors.count) temperature sensors for room \(roomId)")
+            print("✅ Loaded \(sensors.count) power sensors for room \(roomId)")
+            if sensors.isEmpty {
+                print("⚠️ No power sensors found for room \(roomId)")
+            } else {
+                sensors.forEach { sensor in
+                    print("  - Sensor ID: \(sensor.id), Name: \(sensor.name), Active: \(sensor.isActive), Watt: \(sensor.currentWatt ?? 0)W")
+                }
+            }
             
         } catch SmartRoomAPIError.tokenExpired {
             isLoading = false
@@ -654,7 +692,12 @@ class TemperatureViewModel: ObservableObject {
             
         } catch {
             print("❌ API error when loading sensors: \(error.localizedDescription)")
+            print("❌ Error type: \(type(of: error))")
+            if let apiError = error as? SmartRoomAPIError {
+                print("❌ SmartRoomAPIError: \(apiError)")
+            }
             errorMessage = "Không thể tải danh sách cảm biến: \(error.localizedDescription)"
+            debugSensorsResponse = "Error: \(error.localizedDescription)\nType: \(type(of: error))"
             isLoading = false
         }
     }
@@ -708,17 +751,17 @@ class TemperatureViewModel: ObservableObject {
         print("📊 Selected sensor IDs: \(selectedSensorIds)")
         
         do {
-            // Gọi API để lấy dữ liệu lịch sử nhiệt độ
-            let historyData = try await SmartRoomAPIService.shared.getTemperatureHistory(
+            // Gọi API để lấy dữ liệu lịch sử công suất
+            let historyData = try await SmartRoomAPIService.shared.getPowerConsumptionHistory(
                 roomId: roomId,
-                startedAt: startDateStr,
-                endedAt: endDateStr
+                from: startDateStr,
+                to: endDateStr
             )
             
             // Lưu debug info
             let debugInfo = "Total: \(historyData.count) data points\n\n" +
                 historyData.prefix(20).enumerated().map { index, point in
-                    "[\(index + 1)] \(point.timestamp) -> \(String(format: "%.2f", point.avgTempC))°C"
+                    "[\(index + 1)] \(point.timestamp) -> \(String(format: "%.2f", point.sumWatt))W"
                 }.joined(separator: "\n") +
                 (historyData.count > 20 ? "\n\n... và \(historyData.count - 20) điểm nữa" : "")
             debugAPIResponse = debugInfo
@@ -740,8 +783,8 @@ class TemperatureViewModel: ObservableObject {
     }
     
     // Xử lý dữ liệu API thành hourly data points
-    // Mỗi mốc giờ (7h, 8h, 9h...) đại diện cho nhiệt độ trung bình từ giờ đó đến trước giờ tiếp theo
-    private func processHourlyData(historyData: [TemperatureHistoryPoint]) -> [TemperatureChartDataPoint] {
+    // Mỗi mốc giờ (7h, 8h, 9h...) đại diện cho công suất trung bình từ giờ đó đến trước giờ tiếp theo
+    private func processHourlyData(historyData: [PowerHistoryPoint]) -> [PowerChartDataPoint] {
         guard !historyData.isEmpty else { return [] }
         
         // Parse timestamps từ API (ISO8601 format)
@@ -763,26 +806,26 @@ class TemperatureViewModel: ObservableObject {
                 continue
             }
             
-            // Add temperature to this hour's group
+            // Add watt to this hour's group
             if hourlyGroups[hourTimestamp] == nil {
                 hourlyGroups[hourTimestamp] = []
             }
-            hourlyGroups[hourTimestamp]?.append(point.avgTempC)
+            hourlyGroups[hourTimestamp]?.append(point.sumWatt)
         }
         
         // Calculate average for each hour and create chart data points
-        var dataPoints: [TemperatureChartDataPoint] = []
+        var dataPoints: [PowerChartDataPoint] = []
         let selectedSensors = sensors.filter { selectedSensorIds.contains($0.id) }
         
         // Tạo data points cho mỗi sensor được chọn
         for sensor in selectedSensors {
-            for (hourTimestamp, temps) in hourlyGroups {
-                let avgTemp = temps.reduce(0.0, +) / Double(temps.count)
+            for (hourTimestamp, watts) in hourlyGroups {
+                let avgWatt = watts.reduce(0.0, +) / Double(watts.count)
                 
-                dataPoints.append(TemperatureChartDataPoint(
+                dataPoints.append(PowerChartDataPoint(
                     sensorId: sensor.id,
                     sensorName: sensor.name,
-                    temperature: avgTemp,
+                    watt: avgWatt,
                     timestamp: hourTimestamp
                 ))
             }
@@ -795,7 +838,7 @@ class TemperatureViewModel: ObservableObject {
 // MARK: - Preview
 #Preview {
     NavigationView {
-        TemperatureScreen(
+        PowerScreen(
             room: Room(id: 1, name: "Phòng khách", floorId: 1, description: nil)
         )
     }
