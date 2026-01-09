@@ -29,8 +29,14 @@ struct AppTypography {
     // Tiêu đề màn hình (Living Room)
     static let headlineMedium = Font.system(size: 24, weight: .bold, design: .default)
     
+    // Tiêu đề nhỏ hơn (Assign Groups)
+    static let headlineSmall = Font.system(size: 20, weight: .semibold, design: .default)
+    
     // Tên thiết bị (Smart Light)
     static let titleMedium = Font.system(size: 16, weight: .semibold, design: .default)
+    
+    // Text cỡ lớn (ID user, nút)
+    static let bodyLarge = Font.system(size: 16, weight: .regular, design: .default)
     
     // Text phụ (Managed by...)
     static let bodyMedium = Font.system(size: 14, weight: .medium, design: .default)
