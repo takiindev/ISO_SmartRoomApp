@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingScreen: View {
     @StateObject private var viewModel = SettingViewModel()
     @Environment(\.dismiss) private var dismiss
+    @State private var navigateToUserManagement = false
     
     var body: some View {
         ZStack {
@@ -65,11 +66,15 @@ struct SettingScreen: View {
                                 isExpanded: $viewModel.isManagementExpanded
                             ) {
                                 VStack(spacing: 0) {
+                                    NavigationLink(destination: UserManagementScreen(), isActive: $navigateToUserManagement) {
+                                        EmptyView()
+                                    }
+                                    
                                     ManagementSubItem(
                                         title: "Users",
                                         icon: "person.fill"
                                     ) {
-                                        print("Users tapped")
+                                        navigateToUserManagement = true
                                     }
                                     
                                     ManagementSubItem(
