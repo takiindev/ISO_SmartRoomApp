@@ -5,6 +5,9 @@ struct SettingScreen: View {
     @StateObject private var viewModel = SettingViewModel()
     @Environment(\.dismiss) private var dismiss
     @State private var navigateToUserManagement = false
+    @State private var navigateToRoleManagement = false
+    @State private var navigateToGroupManagement = false
+    @State private var navigateToFunctionManagement = false
     
     var body: some View {
         ZStack {
@@ -70,6 +73,18 @@ struct SettingScreen: View {
                                         EmptyView()
                                     }
                                     
+                                    NavigationLink(destination: GroupManagementScreen(), isActive: $navigateToGroupManagement) {
+                                        EmptyView()
+                                    }
+                                    
+                                    NavigationLink(destination: RoleManagementScreen(), isActive: $navigateToRoleManagement) {
+                                        EmptyView()
+                                    }
+                                    
+                                    NavigationLink(destination: FunctionManagementScreen(), isActive: $navigateToFunctionManagement) {
+                                        EmptyView()
+                                    }
+                                    
                                     ManagementSubItem(
                                         title: "Users",
                                         icon: "person.fill"
@@ -81,21 +96,21 @@ struct SettingScreen: View {
                                         title: "Groups",
                                         icon: "person.3.fill"
                                     ) {
-                                        print("Groups tapped")
+                                        navigateToGroupManagement = true
                                     }
                                     
                                     ManagementSubItem(
                                         title: "Roles",
                                         icon: "lock.shield.fill"
                                     ) {
-                                        print("Roles tapped")
+                                        navigateToRoleManagement = true
                                     }
                                     
                                     ManagementSubItem(
                                         title: "Functions",
                                         icon: "puzzlepiece.extension.fill"
                                     ) {
-                                        print("Functions tapped")
+                                        navigateToFunctionManagement = true
                                     }
                                 }
                             }

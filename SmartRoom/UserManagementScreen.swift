@@ -568,6 +568,14 @@ class FakeManagementRepository: ObservableObject {
         SelectionItem(id: 5, name: "Developers")
     ]
     
+    private var mgmtGroups: [MgmtGroup] = [
+        MgmtGroup(id: 1, code: "Administrators", description: "System administrators"),
+        MgmtGroup(id: 2, code: "Users", description: "Regular users"),
+        MgmtGroup(id: 3, code: "Guests", description: "Guest users"),
+        MgmtGroup(id: 4, code: "Moderators", description: "Content moderators"),
+        MgmtGroup(id: 5, code: "Developers", description: "Development team")
+    ]
+    
     private var userGroups: [Int: [Int]] = [
         1: [1, 2],
         2: [2],
@@ -576,11 +584,19 @@ class FakeManagementRepository: ObservableObject {
         5: [1, 5]
     ]
     
+    private var groupUsers: [Int: [Int]] = [
+        1: [1, 5],
+        2: [1, 2, 3, 4],
+        3: [3],
+        4: [4],
+        5: [5]
+    ]
+    
     func getUsers() -> [MgmtUser] {
         return users
     }
     
-    func getGroups() -> [SelectionItem] {
+    func getGroupsAsSelectionItems() -> [SelectionItem] {
         return groups
     }
     
@@ -589,7 +605,7 @@ class FakeManagementRepository: ObservableObject {
     }
     
     func fetchGroupsForUser(userId: Int) -> ([SelectionItem], Set<Int>) {
-        let allGroups = getGroups()
+        let allGroups = getGroupsAsSelectionItems()
         let userGroupIds = getUserGroups(userId: userId)
         return (allGroups, userGroupIds)
     }
@@ -607,6 +623,26 @@ class FakeManagementRepository: ObservableObject {
     func updateUserGroups(userId: Int, groupIds: [Int]) {
         userGroups[userId] = groupIds
         print("Updated groups for user \(userId): \(groupIds)")
+    }
+    
+    // MARK: - Group Management Methods
+    func getGroups() -> [MgmtGroup] {
+        return mgmtGroups
+    }
+    
+    func deleteGroup(groupId: Int) {
+        mgmtGroups.removeAll { $0.id == groupId }
+        groupUsers.removeValue(forKey: groupId)
+    }
+    
+    func getUsersByGroup(groupId: Int) -> [MgmtUser] {
+        let userIds = groupUsers[groupId] ?? []
+        return users.filter { userIds.contains($0.id) }
+    }
+    
+    func updateGroupUsers(groupId: Int, userIds: [Int]) {
+        groupUsers[groupId] = userIds
+        print("Updated users for group \(groupId): \(userIds)")
     }
 }
 
