@@ -6,8 +6,6 @@ struct FunctionManagementScreen: View {
     @State private var functions: [MgmtFunction] = []
     @State private var searchQuery = ""
     @State private var isLoading = true
-    @State private var showDeleteDialog = false
-    @State private var functionToDelete: MgmtFunction?
     @Environment(\.presentationMode) var presentationMode
     
     var filteredFunctions: [MgmtFunction] {
@@ -71,14 +69,8 @@ struct FunctionManagementScreen: View {
                             ForEach(filteredFunctions) { function in
                                 ModernFunctionItemView(
                                     function: function,
-                                    onEdit: {
-                                        // TODO: Add edit functionality
-                                        print("Edit function: \(function.code)")
-                                    },
-                                    onDelete: {
-                                        functionToDelete = function
-                                        showDeleteDialog = true
-                                    }
+                                    onEdit: {},
+                                    onDelete: {}
                                 )
                             }
                         }
@@ -87,58 +79,31 @@ struct FunctionManagementScreen: View {
                     }
                 }
             }
-            
-            // FAB
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        // TODO: Add function functionality
-                        print("Add new function")
-                    }) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 56, height: 56)
-                            .background(AppColors.primaryPurple)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: AppColors.primaryPurple.opacity(0.3), radius: 8, x: 0, y: 4)
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
-                }
-            }
         }
         .navigationBarHidden(true)
         .onAppear {
             loadFunctions()
         }
-        .alert("Delete Function?", isPresented: $showDeleteDialog) {
-            Button("Cancel", role: .cancel) {
-                functionToDelete = nil
-            }
-            Button("Delete", role: .destructive) {
-                if let function = functionToDelete {
-                    deleteFunction(function)
-                }
-            }
-        } message: {
-            if let function = functionToDelete {
-                Text("This will permanently delete function '\(function.code)'.")
-            }
-        }
     }
     
     private func loadFunctions() {
-        functions = repository.getFunctions()
-        isLoading = false
+        Task {
+            await performLoadFunctions()
+        }
     }
     
-    private func deleteFunction(_ function: MgmtFunction) {
-        repository.deleteFunction(functionId: function.id)
-        loadFunctions()
-        functionToDelete = nil
+    @MainActor
+    private func performLoadFunctions() async {
+        isLoading = true
+        
+        do {
+            let apiFunctions = try await SmartRoomAPIService.shared.getAllFunctions()
+            functions = apiFunctions.map { MgmtFunction(from: $0) }
+            isLoading = false
+        } catch {
+            print("Failed to load functions: \(error.localizedDescription)")
+            isLoading = false
+        }
     }
 }
 
@@ -159,32 +124,23 @@ struct ModernFunctionItemView: View {
                 
                 // Info
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(function.code)
+                    Text(function.name)
                         .font(AppTypography.titleMedium)
                         .foregroundColor(AppColors.textPrimary)
                     
-                    Text(function.description)
-                        .font(AppTypography.bodyMedium)
-                        .foregroundColor(AppColors.textSecondary)
-                        .lineLimit(2)
+                    Text(function.code)
+                        .font(.caption)
+                        .foregroundColor(Color(hex: 0x3498DB))
+                    
+                    if let desc = function.description, !desc.isEmpty {
+                        Text(desc)
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                            .lineLimit(2)
+                    }
                 }
                 
                 Spacer()
-                
-                // Actions
-                HStack(spacing: 8) {
-                    ManagementActionButton(
-                        icon: "pencil",
-                        color: AppColors.primaryPurple,
-                        action: onEdit
-                    )
-                    
-                    ManagementActionButton(
-                        icon: "trash",
-                        color: .red,
-                        action: onDelete
-                    )
-                }
             }
         }
     }

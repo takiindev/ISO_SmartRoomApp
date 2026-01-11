@@ -203,10 +203,12 @@ struct LoginView: View {
         
         Task {
             do {
-                let token = try await SmartRoomAPIService.shared.login(username: emailOrUsername, password: password)
+                let loginData = try await SmartRoomAPIService.shared.login(username: emailOrUsername, password: password)
                 await MainActor.run {
                     isLoading = false
-                    TokenManager.shared.saveToken(token)
+                    TokenManager.shared.saveToken(loginData.token)
+                    TokenManager.shared.saveGroups(loginData.groups)
+                    TokenManager.shared.saveCurrentUsername(loginData.username)
                     
                     if rememberMe {
                         TokenManager.shared.saveCredentials(username: emailOrUsername, password: password, apiURL: apiURL)
@@ -214,7 +216,7 @@ struct LoginView: View {
                         TokenManager.shared.clearCredentials()
                     }
                     
-                    debugMessage = "✅ LOGIN SUCCESS!\nToken saved"
+                    debugMessage = "✅ LOGIN SUCCESS!\nToken saved\nUser: \(loginData.username)\nGroups: \(loginData.groups.joined(separator: ", "))"
                     onLoginSuccess()
                 }
             } catch {
@@ -234,10 +236,12 @@ struct LoginView: View {
         
         Task {
             do {
-                let token = try await SmartRoomAPIService.shared.login(username: "demo", password: "demo123")
+                let loginData = try await SmartRoomAPIService.shared.login(username: "demo", password: "demo123")
                 await MainActor.run {
                     isLoading = false
-                    TokenManager.shared.saveToken(token)
+                    TokenManager.shared.saveToken(loginData.token)
+                    TokenManager.shared.saveGroups(loginData.groups)
+                    TokenManager.shared.saveCurrentUsername(loginData.username)
                     
                     if rememberMe {
                         TokenManager.shared.saveCredentials(username: "demo", password: "demo123", apiURL: apiURL)

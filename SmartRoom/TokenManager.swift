@@ -11,6 +11,8 @@ class TokenManager {
     private let usernameKey = "savedUsername"
     private let passwordKey = "savedPassword"
     private let apiURLKey = "savedAPIURL"
+    private let userGroupsKey = "userGroups"
+    private let currentUsernameKey = "currentUsername"
     
     // MARK: - Token Management
     func saveToken(_ token: String) {
@@ -23,6 +25,32 @@ class TokenManager {
     
     func clearToken() {
         UserDefaults.standard.removeObject(forKey: tokenKey)
+    }
+    
+    // MARK: - Groups Management
+    func saveGroups(_ groups: [String]) {
+        UserDefaults.standard.set(groups, forKey: userGroupsKey)
+    }
+    
+    func getGroups() -> [String]? {
+        UserDefaults.standard.stringArray(forKey: userGroupsKey)
+    }
+    
+    func clearGroups() {
+        UserDefaults.standard.removeObject(forKey: userGroupsKey)
+    }
+    
+    // MARK: - Current Username Management
+    func saveCurrentUsername(_ username: String) {
+        UserDefaults.standard.set(username, forKey: currentUsernameKey)
+    }
+    
+    func getCurrentUsername() -> String? {
+        UserDefaults.standard.string(forKey: currentUsernameKey)
+    }
+    
+    func clearCurrentUsername() {
+        UserDefaults.standard.removeObject(forKey: currentUsernameKey)
     }
     
     // MARK: - Remember Me: Credentials
@@ -53,6 +81,8 @@ class TokenManager {
     
     func logout() {
         clearToken()
+        clearGroups()
+        clearCurrentUsername()
         clearCredentials() // Xóa luôn credentials khi logout
         DispatchQueue.main.async {
             self.onLogout?()

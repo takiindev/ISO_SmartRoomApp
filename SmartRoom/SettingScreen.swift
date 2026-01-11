@@ -292,9 +292,12 @@ class SettingViewModel: ObservableObject {
     }
     
     private func checkUserRole() {
-        // TODO: Implement real user role check from UserPreferences/TokenManager
-        // For now, set to true for demo
-        isAdmin = true
+        // Lấy groups từ TokenManager và kiểm tra quyền admin
+        if let groups = TokenManager.shared.getGroups() {
+            isAdmin = groups.contains("G_ADMIN")
+        } else {
+            isAdmin = false
+        }
     }
 }
 
