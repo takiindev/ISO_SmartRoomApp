@@ -18,8 +18,9 @@ struct UserManagementScreen: View {
     @StateObject private var repository = FakeManagementRepository()
     
     @State private var searchQuery = ""
-    @State private var users: [MgmtUser] = []
+    @State private var clients: [GroupClient] = []
     @State private var isLoading = true
+    @State private var errorMessage: String?
     
     // Dialog States
     @State private var showDeleteDialog = false
@@ -29,18 +30,18 @@ struct UserManagementScreen: View {
     
     // Navigation State
     @State private var navigateToDetail = false
-    @State private var selectedUser: MgmtUser?
+    @State private var selectedClient: GroupClient?
+    @State private var showAddUserSheet = false
     
     @State private var showSnackbar = false
     @State private var snackbarMessage = ""
     
-    var filteredUsers: [MgmtUser] {
+    var filteredClients: [GroupClient] {
         if searchQuery.isEmpty {
-            return users
+            return clients
         }
-        return users.filter {
-            $0.username.localizedCaseInsensitiveContains(searchQuery) ||
-            $0.email.localizedCaseInsensitiveContains(searchQuery)
+        return clients.filter {
+            $0.username.localizedCaseInsensitiveContains(searchQuery)
         }
     }
     
@@ -62,32 +63,63 @@ struct UserManagementScreen: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: AppColors.primaryPurple))
                         .scaleEffect(1.5)
                     Spacer()
+                } else if let error = errorMessage {
+                    VStack(spacing: 16) {
+                        Text("❌ Error")
+                            .font(AppTypography.titleMedium)
+                            .foregroundColor(.red)
+                        
+                        Text(error)
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                        
+                        Button("Retry") {
+                            loadUsers()
+                        }
+                        .font(AppTypography.titleMedium)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(AppColors.primaryPurple)
+                        .cornerRadius(8)
+                    }
+                    .padding(20)
+                } else if filteredClients.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "person.crop.circle.badge.xmark")
+                            .font(.system(size: 60))
+                            .foregroundColor(AppColors.textSecondary)
+                        Text(searchQuery.isEmpty ? "No users yet" : "No users found")
+                            .font(AppTypography.titleMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 4) {
                             NavigationLink(
-                                destination: selectedUser.map { UserDetailScreen(user: $0, repository: repository) },
+                                destination: selectedClient.map { UserDetailScreen(client: $0).id($0.id) },
                                 isActive: $navigateToDetail
                             ) {
                                 EmptyView()
                             }
                             
-                            ForEach(filteredUsers) { user in
-                                ModernUserItemView(
-                                    user: user,
+                            ForEach(filteredClients) { client in
+                                ClientItemView(
+                                    client: client,
                                     onEdit: {
                                         // TODO: Add edit functionality
                                     },
                                     onDelete: {
-                                        userToDelete = user
-                                        showDeleteDialog = true
+                                        // TODO: Implement delete
                                     },
                                     onReset: {
-                                        userToReset = user
-                                        showResetDialog = true
+                                        // TODO: Implement reset password
                                     },
                                     onPermission: {
-                                        selectedUser = user
+                                        selectedClient = client
                                         navigateToDetail = true
                                     }
                                 )
@@ -105,7 +137,7 @@ struct UserManagementScreen: View {
                 HStack {
                     Spacer()
                     Button(action: {
-                        // TODO: Add user functionality
+                        showAddUserSheet = true
                     }) {
                         Image(systemName: "plus")
                             .font(.title2)
@@ -179,12 +211,38 @@ struct UserManagementScreen: View {
         .onAppear {
             loadUsers()
         }
+        .sheet(isPresented: $showAddUserSheet) {
+            AddUserSheet(onAdd: { username, password, clientType, ipAddress, macAddress, avatarUrl in
+                Task {
+                    await createNewUser(
+                        username: username,
+                        password: password,
+                        clientType: clientType,
+                        ipAddress: ipAddress,
+                        macAddress: macAddress,
+                        avatarUrl: avatarUrl
+                    )
+                }
+            })
+        }
     }
     
     private func loadUsers() {
+        Task {
+            await performLoadUsers()
+        }
+    }
+    
+    @MainActor
+    private func performLoadUsers() async {
         isLoading = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            users = repository.getUsers()
+        errorMessage = nil
+        
+        do {
+            clients = try await SmartRoomAPIService.shared.getAllClients()
+            isLoading = false
+        } catch {
+            errorMessage = "Failed to load users: \(error.localizedDescription)"
             isLoading = false
         }
     }
@@ -210,19 +268,46 @@ struct UserManagementScreen: View {
             showSnackbar = false
         }
     }
+    
+    @MainActor
+    private func createNewUser(
+        username: String,
+        password: String,
+        clientType: String,
+        ipAddress: String?,
+        macAddress: String?,
+        avatarUrl: String?
+    ) async {
+        do {
+            _ = try await SmartRoomAPIService.shared.createClient(
+                username: username,
+                password: password,
+                clientType: clientType,
+                ipAddress: ipAddress,
+                macAddress: macAddress,
+                avatarUrl: avatarUrl
+            )
+            
+            // Close sheet and reload
+            showAddUserSheet = false
+            loadUsers()
+            showSnackbarMessage("User \(username) created successfully")
+        } catch {
+            errorMessage = "Failed to create user: \(error.localizedDescription)"
+        }
+    }
 }
 
 // MARK: - User Detail Screen
 struct UserDetailScreen: View {
-    let user: MgmtUser
-    let repository: FakeManagementRepository
+    let client: GroupClient
     
     @Environment(\.presentationMode) var presentationMode
-    @State private var allGroups: [SelectionItem] = []
-    @State private var selectedGroupIds: Set<Int> = []
+    @State private var groupsWithStatus: [GroupWithStatus] = []
+    @State private var originalGroupsWithStatus: [GroupWithStatus] = []
     @State private var isLoading = true
-    @State private var showSnackbar = false
-    @State private var snackbarMessage = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -230,21 +315,21 @@ struct UserDetailScreen: View {
                 // User Info Section
                 VStack(spacing: 16) {
                     // Avatar
-                    InitialsAvatarView(name: user.username)
+                    InitialsAvatarView(name: client.username)
                         .frame(width: 80, height: 80)
                     
                     // User Info
                     VStack(spacing: 4) {
-                        Text(user.username)
+                        Text(client.username)
                             .font(AppTypography.headlineMedium)
                             .foregroundColor(AppColors.textPrimary)
                         
-                        Text(user.email)
+                        Text("ID: \(client.id)")
                             .font(AppTypography.bodyMedium)
                             .foregroundColor(AppColors.textSecondary)
                         
-                        Text("ID: \(user.id)")
-                            .font(AppTypography.bodyMedium)
+                        Text(client.clientType)
+                            .font(.caption)
                             .foregroundColor(AppColors.textSecondary)
                     }
                 }
@@ -270,19 +355,37 @@ struct UserDetailScreen: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: AppColors.primaryPurple))
                         .scaleEffect(1.5)
                     Spacer()
+                } else if let error = errorMessage {
+                    VStack(spacing: 16) {
+                        Text("❌ Error")
+                            .font(AppTypography.titleMedium)
+                            .foregroundColor(.red)
+                        
+                        Text(error)
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                        
+                        Button("Retry") {
+                            loadData()
+                        }
+                        .font(AppTypography.titleMedium)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(AppColors.primaryPurple)
+                        .cornerRadius(8)
+                    }
+                    .padding(20)
                 } else {
                     ScrollView {
                         VStack(spacing: 8) {
-                            ForEach(allGroups) { group in
-                                GroupSelectionRow(
-                                    group: group,
-                                    isSelected: selectedGroupIds.contains(group.id),
+                            ForEach(groupsWithStatus.indices, id: \.self) { index in
+                                GroupCheckboxRowWithStatus(
+                                    group: groupsWithStatus[index],
                                     onToggle: {
-                                        if selectedGroupIds.contains(group.id) {
-                                            selectedGroupIds.remove(group.id)
-                                        } else {
-                                            selectedGroupIds.insert(group.id)
-                                        }
+                                        groupsWithStatus[index].isAssignedToClient.toggle()
                                     }
                                 )
                             }
@@ -296,25 +399,26 @@ struct UserDetailScreen: View {
             // Save Button
             if !isLoading {
                 Button(action: saveChanges) {
-                    Text("Save Changes")
-                        .font(AppTypography.bodyLarge)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(AppColors.primaryPurple)
-                        .cornerRadius(12)
+                    HStack(spacing: 12) {
+                        if isSaving {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.9)
+                        }
+                        Text(isSaving ? "Saving..." : "Save Changes")
+                            .font(AppTypography.bodyLarge)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(isSaving ? AppColors.primaryPurple.opacity(0.7) : AppColors.primaryPurple)
+                    .cornerRadius(12)
                 }
+                .disabled(isSaving)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
                 .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
-            }
-            
-            // Snackbar
-            if showSnackbar {
-                SnackbarView(message: snackbarMessage)
-                    .transition(.move(edge: .bottom))
-                    .animation(.spring(), value: showSnackbar)
             }
         }
         .background(AppColors.appBackground.ignoresSafeArea())
@@ -323,53 +427,354 @@ struct UserDetailScreen: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: {
-                    presentationMode.wrappedValue.dismiss()
+                    if !isSaving {
+                        presentationMode.wrappedValue.dismiss()
+                    }
                 }) {
                     Image(systemName: "arrow.left")
                         .font(.title2)
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundColor(isSaving ? AppColors.textSecondary.opacity(0.3) : AppColors.textPrimary)
                 }
+                .disabled(isSaving)
             }
             
             ToolbarItem(placement: .principal) {
-                Text("User Details")
+                Text("Assign Groups")
                     .font(AppTypography.headlineMedium)
                     .foregroundColor(AppColors.textPrimary)
             }
         }
         .onAppear {
+            // Reset state first to clear previous user's data
+            groupsWithStatus = []
+            originalGroupsWithStatus = []
+            isLoading = true
+            errorMessage = nil
             loadData()
         }
     }
     
     private func loadData() {
-        isLoading = true
-        let (groups, groupIds) = repository.fetchGroupsForUser(userId: user.id)
-        allGroups = groups
-        selectedGroupIds = groupIds
-        isLoading = false
-    }
-    
-    private func saveChanges() {
-        repository.updateUserGroups(userId: user.id, groupIds: Array(selectedGroupIds))
-        showSnackbarMessage("Updated groups for \(user.username)")
-        
-        // Auto dismiss after 1.5s
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            presentationMode.wrappedValue.dismiss()
+        Task {
+            await performLoadData()
         }
     }
     
-    private func showSnackbarMessage(_ message: String) {
-        snackbarMessage = message
-        showSnackbar = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            showSnackbar = false
+    @MainActor
+    private func performLoadData() async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            // Fetch all groups with client assignment status
+            groupsWithStatus = try await SmartRoomAPIService.shared.getGroupsWithClientStatus(clientId: client.id)
+            // Store original state for comparison
+            originalGroupsWithStatus = groupsWithStatus
+            isLoading = false
+        } catch {
+            errorMessage = "Failed to load groups: \(error.localizedDescription)"
+            isLoading = false
+        }
+    }
+    
+    private func saveChanges() {
+        Task {
+            await performSaveChanges()
+        }
+    }
+    
+    @MainActor
+    private func performSaveChanges() async {
+        isSaving = true
+        
+        // Compare current state with original state
+        let currentAssigned = Set(groupsWithStatus.filter { $0.isAssignedToClient }.map { $0.id })
+        let originalAssigned = Set(originalGroupsWithStatus.filter { $0.isAssignedToClient }.map { $0.id })
+        
+        // Groups to assign (newly checked)
+        let toAssign = currentAssigned.subtracting(originalAssigned)
+        // Groups to unassign (newly unchecked)
+        let toUnassign = originalAssigned.subtracting(currentAssigned)
+        
+        do {
+            // Assign new groups
+            if !toAssign.isEmpty {
+                _ = try await SmartRoomAPIService.shared.assignGroupsToClient(
+                    clientId: client.id,
+                    groupIds: Array(toAssign)
+                )
+            }
+            
+            // Unassign removed groups
+            if !toUnassign.isEmpty {
+                try await SmartRoomAPIService.shared.unassignGroupsFromClient(
+                    clientId: client.id,
+                    groupIds: Array(toUnassign)
+                )
+            }
+            
+            // Dismiss after successful save
+            presentationMode.wrappedValue.dismiss()
+            
+        } catch {
+            // Handle error silently or show error in UI if needed
+            isSaving = false
+            errorMessage = "Failed to save: \(error.localizedDescription)"
         }
     }
 }
 
-// MARK: - Modern User Item View
+// MARK: - Add User Sheet
+struct AddUserSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var username: String = ""
+    @State private var password: String = ""
+    @State private var clientType: String = "USER"
+    @State private var ipAddress: String = ""
+    @State private var macAddress: String = ""
+    @State private var avatarUrl: String = ""
+    @State private var isSubmitting: Bool = false
+    
+    let onAdd: (String, String, String, String?, String?, String?) -> Void
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                AppColors.appBackground.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Content
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            Spacer().frame(height: 8)
+                            
+                            // Username Input
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Username")
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimary)
+                                
+                                TextField("Username (3-100 chars)", text: $username)
+                                    .font(AppTypography.bodyMedium)
+                                    .padding(16)
+                                    .background(AppColors.surfaceWhite)
+                                    .cornerRadius(12)
+                                    .autocapitalization(.none)
+                            }
+                            
+                            // Password Input
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Password")
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimary)
+                                
+                                SecureField("Password (6-100 chars)", text: $password)
+                                    .font(AppTypography.bodyMedium)
+                                    .padding(16)
+                                    .background(AppColors.surfaceWhite)
+                                    .cornerRadius(12)
+                            }
+                            
+                            // Client Type Picker
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Client Type")
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimary)
+                                
+                                Picker("Client Type", selection: $clientType) {
+                                    Text("USER").tag("USER")
+                                    Text("HARDWARE_GATEWAY").tag("HARDWARE_GATEWAY")
+                                }
+                                .pickerStyle(SegmentedPickerStyle())
+                                .background(AppColors.surfaceWhite)
+                                .cornerRadius(12)
+                            }
+                            
+                            // IP Address Input (Optional)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("IP Address (Optional)")
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textSecondary)
+                                
+                                TextField("192.168.1.x", text: $ipAddress)
+                                    .font(AppTypography.bodyMedium)
+                                    .padding(16)
+                                    .background(AppColors.surfaceWhite)
+                                    .cornerRadius(12)
+                                    .keyboardType(.numbersAndPunctuation)
+                                    .autocapitalization(.none)
+                            }
+                            
+                            // MAC Address Input (Optional)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("MAC Address (Optional)")
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textSecondary)
+                                
+                                TextField("AA:BB:CC:DD:EE:FF", text: $macAddress)
+                                    .font(AppTypography.bodyMedium)
+                                    .padding(16)
+                                    .background(AppColors.surfaceWhite)
+                                    .cornerRadius(12)
+                                    .autocapitalization(.none)
+                            }
+                            
+                            // Avatar URL Input (Optional)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Avatar URL (Optional)")
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textSecondary)
+                                
+                                TextField("https://example.com/avatar.png", text: $avatarUrl)
+                                    .font(AppTypography.bodyMedium)
+                                    .padding(16)
+                                    .background(AppColors.surfaceWhite)
+                                    .cornerRadius(12)
+                                    .keyboardType(.URL)
+                                    .autocapitalization(.none)
+                            }
+                            
+                            Spacer().frame(height: 16)
+                            
+                            // Add Button
+                            Button(action: {
+                                if isValidForm() && !isSubmitting {
+                                    isSubmitting = true
+                                    onAdd(
+                                        username,
+                                        password,
+                                        clientType,
+                                        ipAddress.isEmpty ? nil : ipAddress,
+                                        macAddress.isEmpty ? nil : macAddress,
+                                        avatarUrl.isEmpty ? nil : avatarUrl
+                                    )
+                                }
+                            }) {
+                                HStack {
+                                    if isSubmitting {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.8)
+                                    }
+                                    Text(isSubmitting ? "Creating..." : "Add User")
+                                        .font(AppTypography.titleMedium)
+                                        .foregroundColor(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    (isValidForm() && !isSubmitting)
+                                        ? AppColors.primaryPurple
+                                        : AppColors.textSecondary.opacity(0.3)
+                                )
+                                .cornerRadius(12)
+                            }
+                            .disabled(!isValidForm() || isSubmitting)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                    }
+                }
+            }
+            .navigationTitle("Add New User")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(AppColors.textSecondary)
+                }
+            }
+        }
+    }
+    
+    private func isValidForm() -> Bool {
+        return username.count >= 3 && username.count <= 100 &&
+               password.count >= 6 && password.count <= 100
+    }
+}
+
+// MARK: - Client Item View
+struct ClientItemView: View {
+    let client: GroupClient
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    let onReset: () -> Void
+    let onPermission: () -> Void
+    
+    var body: some View {
+        Button(action: onPermission) {
+            HStack(spacing: 12) {
+                // Avatar
+                InitialsAvatarView(name: client.username)
+                
+                // Info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(client.username)
+                        .font(AppTypography.titleMedium)
+                        .foregroundColor(AppColors.textPrimary)
+                    
+                    Text("ID: \(client.id)")
+                        .font(.system(size: 13))
+                        .foregroundColor(AppColors.textSecondary)
+                }
+                
+                Spacer()
+                
+                // Action Buttons
+                HStack(spacing: 10) {
+                    ActionButton(
+                        icon: "lock.rotation",
+                        color: Color.orange,
+                        action: onReset
+                    )
+                    
+                    ActionButton(
+                        icon: "pencil",
+                        color: AppColors.primaryPurple,
+                        action: onEdit
+                    )
+                    
+                    ActionButton(
+                        icon: "trash",
+                        color: Color.red,
+                        action: onDelete
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(AppColors.surfaceWhite)
+            .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private func formatLastLogin(_ dateString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: dateString) else {
+            return dateString
+        }
+        
+        let now = Date()
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.minute, .hour, .day], from: date, to: now)
+        
+        if let days = components.day, days > 0 {
+            return "\(days)d ago"
+        } else if let hours = components.hour, hours > 0 {
+            return "\(hours)h ago"
+        } else if let minutes = components.minute, minutes > 0 {
+            return "\(minutes)m ago"
+        } else {
+            return "Just now"
+        }
+    }
+}
+
+// MARK: - Modern User Item View (Legacy - kept for compatibility)
 struct ModernUserItemView: View {
     let user: MgmtUser
     let onEdit: () -> Void
@@ -505,7 +910,122 @@ struct SearchBarView: View {
     }
 }
 
-// MARK: - Group Selection Row
+// MARK: - Group Checkbox Row with Status (Using GroupWithStatus model)
+struct GroupCheckboxRowWithStatus: View {
+    let group: GroupWithStatus
+    let onToggle: () -> Void
+    
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 12) {
+                // Checkbox
+                Image(systemName: group.isAssignedToClient ? "checkmark.square.fill" : "square")
+                    .foregroundColor(group.isAssignedToClient ? AppColors.primaryPurple : AppColors.textSecondary.opacity(0.3))
+                    .font(.system(size: 24))
+                
+                // Group Info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name)
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textPrimary)
+                    
+                    Text(group.groupCode)
+                        .font(.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(AppColors.surfaceWhite)
+            .cornerRadius(12)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Group Checkbox Row (Multiple Selection)
+struct GroupCheckboxRow: View {
+    let group: MgmtGroup
+    let isSelected: Bool
+    let onToggle: () -> Void
+    
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 12) {
+                // Checkbox
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                    .foregroundColor(isSelected ? AppColors.primaryPurple : AppColors.textSecondary.opacity(0.3))
+                    .font(.system(size: 24))
+                
+                // Group Info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name)
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textPrimary)
+                    
+                    Text(group.code)
+                        .font(.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(AppColors.surfaceWhite)
+            .cornerRadius(12)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Group Radio Row (Legacy - Single Selection)
+struct GroupRadioRow: View {
+    let group: MgmtGroup
+    let isSelected: Bool
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                // Radio Button
+                ZStack {
+                    Circle()
+                        .stroke(isSelected ? AppColors.primaryPurple : AppColors.textSecondary.opacity(0.3), lineWidth: 2)
+                        .frame(width: 24, height: 24)
+                    
+                    if isSelected {
+                        Circle()
+                            .fill(AppColors.primaryPurple)
+                            .frame(width: 12, height: 12)
+                    }
+                }
+                
+                // Group Info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name)
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textPrimary)
+                    
+                    Text(group.code)
+                        .font(.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(AppColors.surfaceWhite)
+            .cornerRadius(12)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Group Selection Row (Legacy - Multiple Selection)
 struct GroupSelectionRow: View {
     let group: SelectionItem
     let isSelected: Bool
@@ -569,11 +1089,11 @@ class FakeManagementRepository: ObservableObject {
     ]
     
     private var mgmtGroups: [MgmtGroup] = [
-        MgmtGroup(id: 1, code: "Administrators", description: "System administrators"),
-        MgmtGroup(id: 2, code: "Users", description: "Regular users"),
-        MgmtGroup(id: 3, code: "Guests", description: "Guest users"),
-        MgmtGroup(id: 4, code: "Moderators", description: "Content moderators"),
-        MgmtGroup(id: 5, code: "Developers", description: "Development team")
+        MgmtGroup(id: 1, code: "Administrators", name: "Administrators", description: "System administrators"),
+        MgmtGroup(id: 2, code: "Users", name: "Users", description: "Regular users"),
+        MgmtGroup(id: 3, code: "Guests", name: "Guests", description: "Guest users"),
+        MgmtGroup(id: 4, code: "Moderators", name: "Moderators", description: "Content moderators"),
+        MgmtGroup(id: 5, code: "Developers", name: "Developers", description: "Development team")
     ]
     
     private var userGroups: [Int: [Int]] = [

@@ -496,33 +496,74 @@ struct FloorSectionView: View {
 struct RoomCard: View {
     let room: Room
     @State private var isOn: Bool = true
+    @State private var imageError: String = ""
     
     private var roomImageURL: String {
+        // Dùng ảnh placeholder đơn giản từ picsum.photos
+        let imageId: Int
         switch room.name.lowercased() {
         case let name where name.contains("living") || name.contains("khách"):
-            return "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?q=80&w=870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+            imageId = 1
         case let name where name.contains("bed") || name.contains("ngủ"):
-            return "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?q=80&w=580&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+            imageId = 2
         case let name where name.contains("kitchen") || name.contains("bếp"):
-            return "https://images.unsplash.com/photo-1556910096-6f5e72db6803?q=80&w=870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+            imageId = 3
         default:
-            return "https://images.unsplash.com/photo-1628012209120-d9db7abf7eab?q=80&w=436&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+            imageId = room.id
         }
+        return "https://picsum.photos/400/300?random=\(imageId)"
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            AsyncImage(url: URL(string: roomImageURL)) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                ZStack {
+            AsyncImage(url: URL(string: roomImageURL)) { phase in
+                switch phase {
+                case .empty:
+                    ZStack {
+                        Rectangle()
+                            .fill(AppColors.surfaceLight)
+                        
+                        VStack(spacing: 4) {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: AppColors.primaryPurple))
+                            Text("Loading...")
+                                .font(.caption2)
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                    }
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                case .failure(let error):
+                    ZStack {
+                        Rectangle()
+                            .fill(AppColors.surfaceLight)
+                        
+                        VStack(spacing: 4) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.title2)
+                                .foregroundColor(AppColors.textSecondary)
+                            
+                            Text("No image")
+                                .font(.caption2)
+                                .foregroundColor(AppColors.textSecondary)
+                            
+                            // Debug error
+                            Text(error.localizedDescription)
+                                .font(.system(size: 8))
+                                .foregroundColor(.red)
+                                .lineLimit(2)
+                                .padding(.horizontal, 4)
+                        }
+                    }
+                    .onAppear {
+                        print("❌ Image load failed for \(room.name): \(error.localizedDescription)")
+                        print("   URL: \(roomImageURL)")
+                    }
+                @unknown default:
                     Rectangle()
                         .fill(AppColors.surfaceLight)
-                    
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: AppColors.primaryPurple))
                 }
             }
             .frame(height: 120)

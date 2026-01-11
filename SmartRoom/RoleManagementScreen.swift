@@ -4,13 +4,43 @@ import SwiftUI
 struct MgmtGroup: Identifiable {
     let id: Int
     let code: String
-    let description: String
+    let name: String
+    let description: String?
+    
+    init(id: Int, code: String, name: String, description: String?) {
+        self.id = id
+        self.code = code
+        self.name = name
+        self.description = description
+    }
+    
+    init(from group: APIGroup) {
+        self.id = group.id
+        self.code = group.groupCode
+        self.name = group.name
+        self.description = group.description
+    }
 }
 
 struct MgmtFunction: Identifiable {
     let id: Int
     let code: String
-    let description: String
+    let name: String
+    let description: String?
+    
+    init(id: Int, code: String, name: String, description: String?) {
+        self.id = id
+        self.code = code
+        self.name = name
+        self.description = description
+    }
+    
+    init(from apiFunction: APIFunction) {
+        self.id = apiFunction.id
+        self.code = apiFunction.functionCode
+        self.name = apiFunction.name
+        self.description = apiFunction.description
+    }
 }
 
 // MARK: - Role Management Screen
@@ -21,6 +51,7 @@ struct RoleManagementScreen: View {
     @State private var searchQuery = ""
     @State private var groups: [MgmtGroup] = []
     @State private var isLoading = true
+    @State private var errorMessage: String?
     
     // Navigation State
     @State private var navigateToDetail = false
@@ -56,11 +87,45 @@ struct RoleManagementScreen: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: AppColors.primaryPurple))
                         .scaleEffect(1.5)
                     Spacer()
+                } else if let error = errorMessage {
+                    VStack(spacing: 16) {
+                        Text("❌ Error")
+                            .font(AppTypography.titleMedium)
+                            .foregroundColor(.red)
+                        
+                        Text(error)
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                        
+                        Button("Retry") {
+                            loadGroups()
+                        }
+                        .font(AppTypography.titleMedium)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(AppColors.primaryPurple)
+                        .cornerRadius(8)
+                    }
+                    Spacer()
+                } else if filteredGroups.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "person.3.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(AppColors.textSecondary)
+                        
+                        Text(searchQuery.isEmpty ? "No groups yet" : "No groups found")
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                    .frame(maxHeight: .infinity)
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 4) {
                             NavigationLink(
-                                destination: selectedGroup.map { RoleDetailScreen(group: $0, repository: repository) },
+                                destination: selectedGroup.map { RoleDetailScreen(group: $0, repository: repository).id($0.id) },
                                 isActive: $navigateToDetail
                             ) {
                                 EmptyView()
@@ -115,9 +180,25 @@ struct RoleManagementScreen: View {
     }
     
     private func loadGroups() {
+        Task {
+            await performLoadGroups()
+        }
+    }
+    
+    @MainActor
+    private func performLoadGroups() async {
         isLoading = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            groups = repository.getGroups()
+        errorMessage = nil
+        
+        do {
+            let apiGroups = try await SmartRoomAPIService.shared.getAllGroups()
+            // Convert APIGroup to MgmtGroup
+            groups = apiGroups.map { apiGroup in
+                MgmtGroup(from: apiGroup)
+            }
+            isLoading = false
+        } catch {
+            errorMessage = error.localizedDescription
             isLoading = false
         }
     }
@@ -131,9 +212,10 @@ struct RoleDetailScreen: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var allFunctions: [MgmtFunction] = []
     @State private var selectedFunctionIds: Set<Int> = []
+    @State private var originalSelectedFunctionIds: Set<Int> = []
     @State private var isLoading = true
-    @State private var showSnackbar = false
-    @State private var snackbarMessage = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -160,7 +242,7 @@ struct RoleDetailScreen: View {
                             .font(AppTypography.headlineMedium)
                             .foregroundColor(AppColors.textPrimary)
                         
-                        Text(group.description)
+                        Text(group.description ?? "")
                             .font(AppTypography.bodyMedium)
                             .foregroundColor(AppColors.textSecondary)
                         
@@ -191,6 +273,29 @@ struct RoleDetailScreen: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: AppColors.primaryPurple))
                         .scaleEffect(1.5)
                     Spacer()
+                } else if let error = errorMessage {
+                    VStack(spacing: 16) {
+                        Text("❌ Error")
+                            .font(AppTypography.titleMedium)
+                            .foregroundColor(.red)
+                        
+                        Text(error)
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                        
+                        Button("Retry") {
+                            loadData()
+                        }
+                        .font(AppTypography.titleMedium)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(AppColors.primaryPurple)
+                        .cornerRadius(8)
+                    }
+                    Spacer()
                 } else {
                     ScrollView {
                         VStack(spacing: 8) {
@@ -217,25 +322,26 @@ struct RoleDetailScreen: View {
             // Save Button
             if !isLoading {
                 Button(action: saveChanges) {
-                    Text("Save Changes")
-                        .font(AppTypography.bodyLarge)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(AppColors.primaryPurple)
-                        .cornerRadius(12)
+                    HStack(spacing: 12) {
+                        if isSaving {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.9)
+                        }
+                        Text(isSaving ? "Saving..." : "Save Changes")
+                            .font(AppTypography.bodyLarge)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(isSaving ? AppColors.primaryPurple.opacity(0.7) : AppColors.primaryPurple)
+                    .cornerRadius(12)
                 }
+                .disabled(isSaving)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
                 .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
-            }
-            
-            // Snackbar
-            if showSnackbar {
-                SnackbarView(message: snackbarMessage)
-                    .transition(.move(edge: .bottom))
-                    .animation(.spring(), value: showSnackbar)
             }
         }
         .background(AppColors.appBackground.ignoresSafeArea())
@@ -244,12 +350,15 @@ struct RoleDetailScreen: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: {
-                    presentationMode.wrappedValue.dismiss()
+                    if !isSaving {
+                        presentationMode.wrappedValue.dismiss()
+                    }
                 }) {
                     Image(systemName: "arrow.left")
                         .font(.title2)
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundColor(isSaving ? AppColors.textSecondary.opacity(0.3) : AppColors.textPrimary)
                 }
+                .disabled(isSaving)
             }
             
             ToolbarItem(placement: .principal) {
@@ -259,33 +368,90 @@ struct RoleDetailScreen: View {
             }
         }
         .onAppear {
+            // Reset state first to clear previous group's data
+            allFunctions = []
+            selectedFunctionIds = []
+            originalSelectedFunctionIds = []
+            isLoading = true
+            errorMessage = nil
             loadData()
         }
     }
     
     private func loadData() {
-        isLoading = true
-        let (functions, functionIds) = repository.fetchFunctionsForGroup(groupId: group.id)
-        allFunctions = functions
-        selectedFunctionIds = functionIds
-        isLoading = false
-    }
-    
-    private func saveChanges() {
-        repository.updateGroupFunctions(groupId: group.id, functionIds: Array(selectedFunctionIds))
-        showSnackbarMessage("Updated functions for \(group.code)")
-        
-        // Auto dismiss after 1.5s
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            presentationMode.wrappedValue.dismiss()
+        Task {
+            await performLoadData()
         }
     }
     
-    private func showSnackbarMessage(_ message: String) {
-        snackbarMessage = message
-        showSnackbar = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            showSnackbar = false
+    @MainActor
+    private func performLoadData() async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            // Step 1: Load all system functions first
+            print("Loading all functions...")
+            let apiFunctions = try await SmartRoomAPIService.shared.getAllFunctions()
+            print("Loaded \(apiFunctions.count) functions")
+            allFunctions = apiFunctions.map { MgmtFunction(from: $0) }
+            
+            // Step 2: Load functions assigned to this group
+            print("Loading group functions for group \(group.id)...")
+            let groupFunctions = try await SmartRoomAPIService.shared.getGroupFunctions(groupId: group.id)
+            print("Group has \(groupFunctions.count) assigned functions")
+            selectedFunctionIds = Set(groupFunctions.map { $0.id })
+            originalSelectedFunctionIds = selectedFunctionIds
+            
+            isLoading = false
+        } catch {
+            print("Error loading functions: \(error)")
+            errorMessage = "Failed to load functions: \(error.localizedDescription)"
+            isLoading = false
+        }
+    }
+    
+    private func saveChanges() {
+        Task {
+            await performSaveChanges()
+        }
+    }
+    
+    @MainActor
+    private func performSaveChanges() async {
+        isSaving = true
+        
+        // Compare current state with original state
+        let toAdd = selectedFunctionIds.subtracting(originalSelectedFunctionIds)
+        let toRemove = originalSelectedFunctionIds.subtracting(selectedFunctionIds)
+        
+        // Get function codes for the changed functions
+        let functionsToAdd = allFunctions.filter { toAdd.contains($0.id) }.map { $0.code }
+        let functionsToRemove = allFunctions.filter { toRemove.contains($0.id) }.map { $0.code }
+        
+        do {
+            // Add new functions
+            if !functionsToAdd.isEmpty {
+                _ = try await SmartRoomAPIService.shared.batchAddFunctionsToGroup(
+                    groupId: group.id,
+                    functionCodes: functionsToAdd
+                )
+            }
+            
+            // Remove functions
+            if !functionsToRemove.isEmpty {
+                _ = try await SmartRoomAPIService.shared.batchRemoveFunctionsFromGroup(
+                    groupId: group.id,
+                    functionCodes: functionsToRemove
+                )
+            }
+            
+            // Dismiss after successful save
+            presentationMode.wrappedValue.dismiss()
+            
+        } catch {
+            isSaving = false
+            errorMessage = "Failed to save: \(error.localizedDescription)"
         }
     }
 }
@@ -319,7 +485,7 @@ struct ModernRoleItemView: View {
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.textPrimary)
                     
-                    Text(group.description)
+                    Text(group.description ?? "")
                         .font(.system(size: 13))
                         .foregroundColor(AppColors.textSecondary)
                 }
@@ -352,14 +518,20 @@ struct FunctionSelectionRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(function.code)
+                        Text(function.name)
                             .font(AppTypography.bodyMedium)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.textPrimary)
                         
-                        Text(function.description)
-                            .font(.system(size: 12))
-                            .foregroundColor(AppColors.textSecondary)
+                        Text(function.code)
+                            .font(.system(size: 11))
+                            .foregroundColor(AppColors.textSecondary.opacity(0.7))
+                        
+                        if let desc = function.description {
+                            Text(desc)
+                                .font(.system(size: 12))
+                                .foregroundColor(AppColors.textSecondary)
+                        }
                     }
                     
                     Spacer()
@@ -381,24 +553,24 @@ struct FunctionSelectionRow: View {
 // MARK: - Fake Role Repository
 class FakeRoleRepository: ObservableObject {
     private var groups: [MgmtGroup] = [
-        MgmtGroup(id: 1, code: "ADMIN", description: "Administrator group"),
-        MgmtGroup(id: 2, code: "USER", description: "Standard user group"),
-        MgmtGroup(id: 3, code: "GUEST", description: "Guest user group"),
-        MgmtGroup(id: 4, code: "MODERATOR", description: "Moderator group"),
-        MgmtGroup(id: 5, code: "DEVELOPER", description: "Developer group")
+        MgmtGroup(id: 1, code: "ADMIN", name: "Administrator", description: "Administrator group"),
+        MgmtGroup(id: 2, code: "USER", name: "User", description: "Standard user group"),
+        MgmtGroup(id: 3, code: "GUEST", name: "Guest", description: "Guest user group"),
+        MgmtGroup(id: 4, code: "MODERATOR", name: "Moderator", description: "Moderator group"),
+        MgmtGroup(id: 5, code: "DEVELOPER", name: "Developer", description: "Developer group")
     ]
     
     private var functions: [MgmtFunction] = [
-        MgmtFunction(id: 1, code: "USER_READ", description: "View user information"),
-        MgmtFunction(id: 2, code: "USER_WRITE", description: "Create and edit users"),
-        MgmtFunction(id: 3, code: "USER_DELETE", description: "Delete users"),
-        MgmtFunction(id: 4, code: "ROOM_READ", description: "View rooms"),
-        MgmtFunction(id: 5, code: "ROOM_WRITE", description: "Create and edit rooms"),
-        MgmtFunction(id: 6, code: "ROOM_DELETE", description: "Delete rooms"),
-        MgmtFunction(id: 7, code: "DEVICE_READ", description: "View devices"),
-        MgmtFunction(id: 8, code: "DEVICE_WRITE", description: "Create and edit devices"),
-        MgmtFunction(id: 9, code: "DEVICE_DELETE", description: "Delete devices"),
-        MgmtFunction(id: 10, code: "SETTINGS_MANAGE", description: "Manage system settings")
+        MgmtFunction(id: 1, code: "USER_READ", name: "View Users", description: "View user information"),
+        MgmtFunction(id: 2, code: "USER_WRITE", name: "Edit Users", description: "Create and edit users"),
+        MgmtFunction(id: 3, code: "USER_DELETE", name: "Delete Users", description: "Delete users"),
+        MgmtFunction(id: 4, code: "ROOM_READ", name: "View Rooms", description: "View rooms"),
+        MgmtFunction(id: 5, code: "ROOM_WRITE", name: "Edit Rooms", description: "Create and edit rooms"),
+        MgmtFunction(id: 6, code: "ROOM_DELETE", name: "Delete Rooms", description: "Delete rooms"),
+        MgmtFunction(id: 7, code: "DEVICE_READ", name: "View Devices", description: "View devices"),
+        MgmtFunction(id: 8, code: "DEVICE_WRITE", name: "Edit Devices", description: "Create and edit devices"),
+        MgmtFunction(id: 9, code: "DEVICE_DELETE", name: "Delete Devices", description: "Delete devices"),
+        MgmtFunction(id: 10, code: "SETTINGS_MANAGE", name: "Manage Settings", description: "Manage system settings")
     ]
     
     private var groupFunctions: [Int: [Int]] = [

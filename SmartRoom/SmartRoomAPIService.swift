@@ -60,6 +60,9 @@ struct LoginAPIResponse: Codable {
 
 struct LoginTokenData: Codable {
     let token: String
+    let type: String
+    let username: String
+    let groups: [String]
 }
 
 // MARK: - Common API Response
@@ -144,7 +147,7 @@ final class SmartRoomAPIService {
     }
 
     // MARK: - Login
-    func login(username: String, password: String) async throws -> String {
+    func login(username: String, password: String) async throws -> LoginTokenData {
         let url = makeURL("/auth/signin")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -159,7 +162,7 @@ final class SmartRoomAPIService {
         switch http.statusCode {
         case 200:
             let decoded = try JSONDecoder().decode(LoginAPIResponse.self, from: data)
-            return decoded.data.token
+            return decoded.data
         case 401:
             throw SmartRoomAPIError.unauthorized
         default:
@@ -280,6 +283,138 @@ final class SmartRoomAPIService {
         let response = try JSONDecoder().decode(APIResponse<[PowerHistoryPoint]>.self, from: data)
         return response.data
     }
+    
+    // MARK: - Groups
+    func getAllGroups() async throws -> [APIGroup] {
+        let url = makeURL("/groups/all")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[APIGroup]>.self, from: data)
+        return response.data
+    }
+    
+    func createGroup(groupCode: String, name: String, description: String?, langCode: String? = "vi") async throws -> APIGroup {
+        let url = makeURL("/groups")
+        let requestBody = CreateGroupRequest(
+            groupCode: groupCode,
+            name: name,
+            description: description,
+            langCode: langCode
+        )
+        let body = try JSONEncoder().encode(requestBody)
+        let data = try await makeAuthenticatedRequest(url: url, method: "POST", body: body)
+        let response = try JSONDecoder().decode(APIResponse<APIGroup>.self, from: data)
+        return response.data
+    }
+    
+    func deleteGroup(groupId: Int) async throws {
+        let url = makeURL("/groups/\(groupId)")
+        _ = try await makeAuthenticatedRequest(url: url, method: "DELETE")
+    }
+    
+    func getGroupClients(groupId: Int) async throws -> [GroupClient] {
+        let url = makeURL("/groups/\(groupId)/clients/all")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[GroupClient]>.self, from: data)
+        return response.data
+    }
+    
+    func getAllClients(page: Int = 0, size: Int = 50) async throws -> [GroupClient] {
+        let url = makeURL("/clients?page=\(page)&size=\(size)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<PaginatedData<GroupClient>>.self, from: data)
+        return response.data.content
+    }
+    
+    func createClient(
+        username: String,
+        password: String,
+        clientType: String,
+        ipAddress: String?,
+        macAddress: String?,
+        avatarUrl: String?
+    ) async throws -> GroupClient {
+        let url = makeURL("/clients")
+        let requestBody = CreateClientRequest(
+            username: username,
+            password: password,
+            clientType: clientType,
+            ipAddress: ipAddress,
+            macAddress: macAddress,
+            avatarUrl: avatarUrl
+        )
+        let body = try JSONEncoder().encode(requestBody)
+        let data = try await makeAuthenticatedRequest(url: url, method: "POST", body: body)
+        let response = try JSONDecoder().decode(APIResponse<GroupClient>.self, from: data)
+        return response.data
+    }
+    
+    func removeClientFromGroup(clientId: Int, groupId: Int) async throws {
+        let url = makeURL("/roles/clients/\(clientId)/groups/\(groupId)")
+        _ = try await makeAuthenticatedRequest(url: url, method: "DELETE")
+    }
+    
+    func getClientGroups(clientId: Int) async throws -> [APIGroup] {
+        let url = makeURL("/clients/\(clientId)/groups/all")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[APIGroup]>.self, from: data)
+        return response.data
+    }
+    
+    func getGroupsWithClientStatus(clientId: Int) async throws -> [GroupWithStatus] {
+        let url = makeURL("/groups/with-client-status/\(clientId)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[GroupWithStatus]>.self, from: data)
+        return response.data
+    }
+    
+    func assignGroupsToClient(clientId: Int, groupIds: [Int]) async throws -> AssignGroupsResponse {
+        let url = makeURL("/roles/clients/groups/assign")
+        let requestBody = AssignGroupsRequest(clientId: clientId, groupIds: groupIds)
+        let body = try JSONEncoder().encode(requestBody)
+        let data = try await makeAuthenticatedRequest(url: url, method: "POST", body: body)
+        let response = try JSONDecoder().decode(APIResponse<AssignGroupsResponse>.self, from: data)
+        return response.data
+    }
+    
+    func unassignGroupsFromClient(clientId: Int, groupIds: [Int]) async throws {
+        let url = makeURL("/roles/clients/groups/unassign")
+        let requestBody = AssignGroupsRequest(clientId: clientId, groupIds: groupIds)
+        let body = try JSONEncoder().encode(requestBody)
+        _ = try await makeAuthenticatedRequest(url: url, method: "POST", body: body)
+    }
+    
+    // MARK: - Function APIs
+    func getAllFunctions() async throws -> [APIFunction] {
+        let url = makeURL("/functions/all")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[APIFunction]>.self, from: data)
+        return response.data
+    }
+    
+    func getGroupFunctions(groupId: Int) async throws -> [APIFunction] {
+        let url = makeURL("/groups/\(groupId)/functions/all")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[APIFunction]>.self, from: data)
+        return response.data
+    }
+    
+    func batchAddFunctionsToGroup(groupId: Int, functionCodes: [String]) async throws -> BatchFunctionsResponse {
+        let url = makeURL("/roles/groups/functions/batch-add")
+        let requestBody = BatchFunctionsRequest(groupId: groupId, functionCodes: functionCodes)
+        let body = try JSONEncoder().encode(requestBody)
+        let data = try await makeAuthenticatedRequest(url: url, method: "POST", body: body)
+        let response = try JSONDecoder().decode(APIResponse<BatchFunctionsResponse>.self, from: data)
+        return response.data
+    }
+    
+    func batchRemoveFunctionsFromGroup(groupId: Int, functionCodes: [String]) async throws -> BatchFunctionsResponse {
+        let url = makeURL("/roles/groups/functions/batch-remove")
+        let requestBody = BatchFunctionsRequest(groupId: groupId, functionCodes: functionCodes)
+        let body = try JSONEncoder().encode(requestBody)
+        let data = try await makeAuthenticatedRequest(url: url, method: "POST", body: body)
+        let response = try JSONDecoder().decode(APIResponse<BatchFunctionsResponse>.self, from: data)
+        return response.data
+    }
 }
 
 // MARK: - Temperature History Model
@@ -303,4 +438,82 @@ struct PowerSensor: Codable, Identifiable {
 struct PowerHistoryPoint: Codable {
     let timestamp: String  // ISO8601 format from API
     let sumWatt: Double
+}
+// MARK: - Group Models
+struct APIGroup: Codable, Identifiable {
+    let id: Int
+    let groupCode: String
+    let name: String
+    let description: String?
+}
+
+struct CreateGroupRequest: Codable {
+    let groupCode: String
+    let name: String
+    let description: String?
+    let langCode: String?
+}
+
+// MARK: - Client Models
+struct GroupClient: Codable, Identifiable {
+    let id: Int
+    let username: String
+    let clientType: String
+    let ipAddress: String?
+    let macAddress: String?
+    let avatarUrl: String?
+    let lastLoginAt: String?
+}
+
+// MARK: - Create Client Models
+struct CreateClientRequest: Codable {
+    let username: String
+    let password: String
+    let clientType: String
+    let ipAddress: String?
+    let macAddress: String?
+    let avatarUrl: String?
+}
+
+// MARK: - Group with Client Status Model
+struct GroupWithStatus: Codable, Identifiable {
+    let id: Int
+    let groupCode: String
+    let name: String
+    let description: String?
+    var isAssignedToClient: Bool
+}
+
+// MARK: - Assign/Unassign Groups Models
+struct AssignGroupsRequest: Codable {
+    let clientId: Int
+    let groupIds: [Int]
+}
+
+struct AssignGroupsResponse: Codable {
+    let successCount: Int
+    let skippedCount: Int
+    let failedCount: Int
+    let message: String
+}
+
+// MARK: - Batch Add/Remove Functions Models
+struct BatchFunctionsRequest: Codable {
+    let groupId: Int
+    let functionCodes: [String]
+}
+
+struct BatchFunctionsResponse: Codable {
+    let successCount: Int
+    let skippedCount: Int
+    let failedCount: Int
+    let message: String
+}
+
+// MARK: - Function Models
+struct APIFunction: Codable, Identifiable {
+    let id: Int
+    let functionCode: String
+    let name: String
+    let description: String?
 }
