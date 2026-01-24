@@ -8,6 +8,7 @@ struct SettingScreen: View {
     @State private var navigateToRoleManagement = false
     @State private var navigateToGroupManagement = false
     @State private var navigateToFunctionManagement = false
+    @State private var navigateToAutomation = false
     
     var body: some View {
         ZStack {
@@ -40,6 +41,39 @@ struct SettingScreen: View {
                 
                 // Content
                 ScrollView {
+                    VStack(spacing: 0) {
+                        // Hidden Navigation Links
+                        NavigationLink(destination: AutomationScreen(), isActive: $navigateToAutomation) {
+                            EmptyView()
+                        }
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+                        
+                        NavigationLink(destination: UserManagementScreen(), isActive: $navigateToUserManagement) {
+                            EmptyView()
+                        }
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+                        
+                        NavigationLink(destination: GroupManagementScreen(), isActive: $navigateToGroupManagement) {
+                            EmptyView()
+                        }
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+                        
+                        NavigationLink(destination: RoleManagementScreen(), isActive: $navigateToRoleManagement) {
+                            EmptyView()
+                        }
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+                        
+                        NavigationLink(destination: FunctionManagementScreen(), isActive: $navigateToFunctionManagement) {
+                            EmptyView()
+                        }
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+                    }
+                    
                     VStack(spacing: 16) {
                         Spacer().frame(height: 8)
                         
@@ -61,7 +95,17 @@ struct SettingScreen: View {
                             print("Username tapped")
                         }
                         
-                        // 3. Management (Expandable) - Chỉ hiển thị nếu isAdmin
+                        // 3. Automation Card - Chỉ hiển thị nếu isAdmin
+                        if viewModel.isAdmin {
+                            SettingItemCard(
+                                title: "Automation",
+                                icon: "wand.and.stars"
+                            ) {
+                                navigateToAutomation = true
+                            }
+                        }
+                        
+                        // 4. Management (Expandable) - Chỉ hiển thị nếu isAdmin
                         if viewModel.isAdmin {
                             ExpandableManagementCard(
                                 title: "Management",
@@ -69,22 +113,6 @@ struct SettingScreen: View {
                                 isExpanded: $viewModel.isManagementExpanded
                             ) {
                                 VStack(spacing: 0) {
-                                    NavigationLink(destination: UserManagementScreen(), isActive: $navigateToUserManagement) {
-                                        EmptyView()
-                                    }
-                                    
-                                    NavigationLink(destination: GroupManagementScreen(), isActive: $navigateToGroupManagement) {
-                                        EmptyView()
-                                    }
-                                    
-                                    NavigationLink(destination: RoleManagementScreen(), isActive: $navigateToRoleManagement) {
-                                        EmptyView()
-                                    }
-                                    
-                                    NavigationLink(destination: FunctionManagementScreen(), isActive: $navigateToFunctionManagement) {
-                                        EmptyView()
-                                    }
-                                    
                                     ManagementSubItem(
                                         title: "Users",
                                         icon: "person.fill"
@@ -116,7 +144,7 @@ struct SettingScreen: View {
                             }
                         }
                         
-                        // 4. Premium Card
+                        // 5. Premium Card
                         SettingItemCard(
                             title: "Get Premium Now",
                             icon: "crown.fill",
@@ -257,6 +285,7 @@ struct ExpandableManagementCard: View {
                 }
                 .padding(.horizontal, 16)
                 .frame(height: 56)
+                .contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
             

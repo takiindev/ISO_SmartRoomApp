@@ -48,6 +48,36 @@ struct UserManagementScreen: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        Image(systemName: "arrow.left")
+                            .font(.title2)
+                            .foregroundColor(AppColors.textPrimary)
+                    }
+                    
+                    Spacer()
+                    
+                    Text("Users")
+                        .font(AppTypography.headlineMedium)
+                        .foregroundColor(AppColors.textPrimary)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        showAddUserSheet = true
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(AppColors.primaryPurple)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
+                .background(AppColors.appBackground)
+                
                 // Search Bar
                 SearchBarView(
                     query: $searchQuery,
@@ -126,30 +156,8 @@ struct UserManagementScreen: View {
                             }
                         }
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 80) // Space for FAB
+                        .padding(.bottom, 20)
                     }
-                }
-            }
-            
-            // Floating Action Button
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        showAddUserSheet = true
-                    }) {
-                        Image(systemName: "plus")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .frame(width: 56, height: 56)
-                            .background(AppColors.primaryPurple)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
                 }
             }
             
@@ -161,25 +169,7 @@ struct UserManagementScreen: View {
             }
         }
         .background(AppColors.appBackground.ignoresSafeArea())
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    presentationMode.wrappedValue.dismiss()
-                }) {
-                    Image(systemName: "arrow.left")
-                        .font(.title2)
-                        .foregroundColor(AppColors.textPrimary)
-                }
-            }
-            
-            ToolbarItem(placement: .principal) {
-                Text("Users")
-                    .font(AppTypography.headlineMedium)
-                    .foregroundColor(AppColors.textPrimary)
-            }
-        }
+        .navigationBarHidden(true)
         .alert("Delete User?", isPresented: $showDeleteDialog) {
             Button("Cancel", role: .cancel) {
                 showDeleteDialog = false

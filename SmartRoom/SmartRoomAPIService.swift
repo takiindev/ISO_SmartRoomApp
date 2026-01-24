@@ -189,6 +189,13 @@ final class SmartRoomAPIService {
     }
 
     // MARK: - Lights
+    func getAllLights(page: Int = 0, size: Int = 50) async throws -> [Light] {
+        let url = makeURL("/lights?page=\(page)&size=\(size)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<PaginatedData<Light>>.self, from: data)
+        return response.data.content
+    }
+    
     func getLightsByRoom(_ roomId: Int) async throws -> [Light] {
         let url = makeURL("/lights/room/\(roomId)")
         let data = try await makeAuthenticatedRequest(url: url)
@@ -415,6 +422,75 @@ final class SmartRoomAPIService {
         let response = try JSONDecoder().decode(APIResponse<BatchFunctionsResponse>.self, from: data)
         return response.data
     }
+    
+    // MARK: - Automation APIs
+    func getAllAutomations(page: Int = 0, size: Int = 100) async throws -> PaginatedData<APIAutomation> {
+        let url = makeURL("/automations?page=\(page)&size=\(size)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<PaginatedData<APIAutomation>>.self, from: data)
+        return response.data
+    }
+    
+    func getAutomationActions(automationId: Int) async throws -> [AutomationAction] {
+        let url = makeURL("/automations/\(automationId)/actions")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[AutomationAction]>.self, from: data)
+        return response.data
+    }
+    
+    func createAutomation(name: String, cronExpression: String, isActive: Bool?, description: String?) async throws -> APIAutomation {
+        let url = makeURL("/automations")
+        let requestBody = CreateAutomationRequest(
+            name: name,
+            cronExpression: cronExpression,
+            isActive: isActive,
+            description: description
+        )
+        let body = try JSONEncoder().encode(requestBody)
+        let data = try await makeAuthenticatedRequest(url: url, method: "POST", body: body)
+        let response = try JSONDecoder().decode(APIResponse<APIAutomation>.self, from: data)
+        return response.data
+    }
+    
+    func updateAutomation(id: Int, name: String?, cronExpression: String?, isActive: Bool?, description: String?) async throws -> APIAutomation {
+        let url = makeURL("/automations/\(id)")
+        let requestBody = UpdateAutomationRequest(
+            name: name,
+            cronExpression: cronExpression,
+            isActive: isActive,
+            description: description
+        )
+        let body = try JSONEncoder().encode(requestBody)
+        let data = try await makeAuthenticatedRequest(url: url, method: "PUT", body: body)
+        let response = try JSONDecoder().decode(APIResponse<APIAutomation>.self, from: data)
+        return response.data
+    }
+    
+    // MARK: - Automation Actions
+    func createAutomationAction(automationId: Int, targetType: String, targetId: Int, actionType: String, parameterValue: String? = nil, executionOrder: Int? = nil) async throws -> AutomationAction {
+        let url = makeURL("/automations/\(automationId)/actions")
+        let requestBody = CreateActionRequest(
+            targetType: targetType,
+            targetId: targetId,
+            actionType: actionType,
+            parameterValue: parameterValue,
+            executionOrder: executionOrder
+        )
+        let body = try JSONEncoder().encode(requestBody)
+        let data = try await makeAuthenticatedRequest(url: url, method: "POST", body: body)
+        let response = try JSONDecoder().decode(APIResponse<AutomationAction>.self, from: data)
+        return response.data
+    }
+    
+    func deleteAutomationAction(actionId: Int) async throws {
+        let url = makeURL("/automations/actions/\(actionId)")
+        _ = try await makeAuthenticatedRequest(url: url, method: "DELETE")
+    }
+    
+    func deleteAutomation(automationId: Int) async throws {
+        let url = makeURL("/automations/\(automationId)")
+        _ = try await makeAuthenticatedRequest(url: url, method: "DELETE")
+    }
 }
 
 // MARK: - Temperature History Model
@@ -516,4 +592,48 @@ struct APIFunction: Codable, Identifiable {
     let functionCode: String
     let name: String
     let description: String?
+}
+
+// MARK: - Automation Models
+struct APIAutomation: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let cronExpression: String
+    let isActive: Bool
+    let description: String?
+    let createdAt: String?
+    let updatedAt: String?
+}
+
+struct AutomationAction: Codable, Identifiable {
+    let id: Int
+    let automationId: Int
+    let targetType: String
+    let targetId: Int
+    let actionType: String
+    let parameterValue: String?
+    let executionOrder: Int
+    let targetName: String
+}
+
+struct CreateAutomationRequest: Codable {
+    let name: String
+    let cronExpression: String
+    let isActive: Bool?
+    let description: String?
+}
+
+struct UpdateAutomationRequest: Codable {
+    let name: String?
+    let cronExpression: String?
+    let isActive: Bool?
+    let description: String?
+}
+
+struct CreateActionRequest: Codable {
+    let targetType: String
+    let targetId: Int
+    let actionType: String
+    let parameterValue: String?
+    let executionOrder: Int?
 }

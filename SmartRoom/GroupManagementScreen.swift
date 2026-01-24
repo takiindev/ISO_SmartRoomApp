@@ -45,13 +45,16 @@ struct GroupManagementScreen: View {
                     
                     Spacer()
                     
-                    // Invisible button for balance
-                    Image(systemName: "arrow.left")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.clear)
+                    Button(action: {
+                        showAddGroupSheet = true
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(AppColors.primaryPurple)
+                    }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
                 .background(AppColors.appBackground)
                 
                 // Search Bar
@@ -114,29 +117,8 @@ struct GroupManagementScreen: View {
                             }
                         }
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 80)
+                        .padding(.bottom, 20)
                     }
-                }
-            }
-            
-            // FAB
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        showAddGroupSheet = true
-                    }) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 56, height: 56)
-                            .background(AppColors.primaryPurple)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: AppColors.primaryPurple.opacity(0.3), radius: 8, x: 0, y: 4)
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
                 }
             }
             
