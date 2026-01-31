@@ -7,6 +7,7 @@ enum SmartRoomAPIError: Error, Equatable {
     case networkError(String)
     case invalidResponse
     case unauthorized
+    case serverError(String)
 
     static func == (lhs: SmartRoomAPIError, rhs: SmartRoomAPIError) -> Bool {
         switch (lhs, rhs) {
@@ -15,6 +16,8 @@ enum SmartRoomAPIError: Error, Equatable {
              (.unauthorized, .unauthorized):
             return true
         case (.networkError(let l), .networkError(let r)):
+            return l == r
+        case (.serverError(let l), .serverError(let r)):
             return l == r
         default:
             return false
@@ -43,6 +46,20 @@ struct Light: Codable, Identifiable {
     var isActive: Bool
     var level: Int
     let description: String?
+}
+
+struct AirCondition: Codable, Identifiable {
+    let id: Int
+    let naturalId: String
+    let name: String
+    let description: String?
+    let isActive: Bool
+    let roomId: Int
+    let power: String
+    let temperature: Int
+    let mode: String
+    let fanSpeed: Int
+    let swing: String
 }
 
 // MARK: - Auth Models
@@ -251,6 +268,208 @@ final class SmartRoomAPIService {
         let url = makeURL("/lights/\(lightId)")
         let data = try await makeAuthenticatedRequest(url: url)
         return String(data: data, encoding: .utf8) ?? "{}"
+    }
+    
+    // MARK: - Air Conditions
+    func getAirConditionsByRoom(_ roomId: Int, page: Int = 0, size: Int = 50) async throws -> [AirCondition] {
+        let url = makeURL("/air-conditions/room/\(roomId)?page=\(page)&size=\(size)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<PaginatedData<AirCondition>>.self, from: data)
+        return response.data.content
+    }
+    
+    func getAirConditionById(_ acId: Int) async throws -> AirCondition {
+        let url = makeURL("/air-conditions/\(acId)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<AirCondition>.self, from: data)
+        return response.data
+    }
+    
+    func updateAirCondition(_ acId: Int, power: String) async throws -> AirCondition {
+        // Use POST endpoint with query parameter
+        let url = makeURL("/air-conditions/\(acId)/power?state=\(power)")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        // Add authorization token
+        if let token = TokenManager.shared.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 401 {
+            TokenManager.shared.clearToken()
+            throw SmartRoomAPIError.tokenExpired
+        }
+        
+        // Accept both 200 and 400 to parse error message
+        if httpResponse.statusCode == 400 {
+            // Try to parse error message
+            if let errorJson = try? JSONDecoder().decode(APIResponse<AirCondition>.self, from: data) {
+                throw SmartRoomAPIError.serverError(errorJson.message)
+            }
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<AirCondition>.self, from: data)
+        return apiResponse.data
+    }
+    
+    func updateTemperature(_ acId: Int, temperature: Int) async throws -> AirCondition {
+        let url = makeURL("/air-conditions/\(acId)/temperature?value=\(temperature)")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        // Add authorization token
+        if let token = TokenManager.shared.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 401 {
+            TokenManager.shared.clearToken()
+            throw SmartRoomAPIError.tokenExpired
+        }
+        
+        // Accept both 200 and 400 to parse error message
+        if httpResponse.statusCode == 400 {
+            // Try to parse error message
+            if let errorJson = try? JSONDecoder().decode(APIResponse<AirCondition>.self, from: data) {
+                throw SmartRoomAPIError.serverError(errorJson.message)
+            }
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<AirCondition>.self, from: data)
+        return apiResponse.data
+    }
+    
+    func updateMode(_ acId: Int, mode: String) async throws -> AirCondition {
+        let url = makeURL("/air-conditions/\(acId)/mode?value=\(mode)")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        if let token = TokenManager.shared.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 401 {
+            TokenManager.shared.clearToken()
+            throw SmartRoomAPIError.tokenExpired
+        }
+        
+        if httpResponse.statusCode == 400 {
+            if let errorJson = try? JSONDecoder().decode(APIResponse<AirCondition>.self, from: data) {
+                throw SmartRoomAPIError.serverError(errorJson.message)
+            }
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<AirCondition>.self, from: data)
+        return apiResponse.data
+    }
+    
+    func updateFanSpeed(_ acId: Int, speed: Int) async throws -> AirCondition {
+        let url = makeURL("/air-conditions/\(acId)/fan?speed=\(speed)")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        if let token = TokenManager.shared.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 401 {
+            TokenManager.shared.clearToken()
+            throw SmartRoomAPIError.tokenExpired
+        }
+        
+        if httpResponse.statusCode == 400 {
+            if let errorJson = try? JSONDecoder().decode(APIResponse<AirCondition>.self, from: data) {
+                throw SmartRoomAPIError.serverError(errorJson.message)
+            }
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<AirCondition>.self, from: data)
+        return apiResponse.data
+    }
+    
+    func updateSwing(_ acId: Int, state: String) async throws -> AirCondition {
+        let url = makeURL("/air-conditions/\(acId)/swing?state=\(state)")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        if let token = TokenManager.shared.getToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 401 {
+            TokenManager.shared.clearToken()
+            throw SmartRoomAPIError.tokenExpired
+        }
+        
+        if httpResponse.statusCode == 400 {
+            if let errorJson = try? JSONDecoder().decode(APIResponse<AirCondition>.self, from: data) {
+                throw SmartRoomAPIError.serverError(errorJson.message)
+            }
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw SmartRoomAPIError.invalidResponse
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<AirCondition>.self, from: data)
+        return apiResponse.data
     }
     
     // MARK: - Temperature Sensors

@@ -3,6 +3,15 @@ import SwiftUI
 struct HomeScreen: View {
     let onLogout: () -> Void
     
+    var body: some View {
+        MainTabView(onLogout: onLogout)
+    }
+}
+
+// MARK: - Home Screen Content
+struct HomeScreenContent: View {
+    let onLogout: () -> Void
+    
     @State private var activeMode: String = "home"
     @State private var selectedTab: Int = 0
     @State private var isLoading: Bool = false
@@ -41,13 +50,13 @@ struct HomeScreen: View {
                 .padding(.top, 8)
                 .padding(.bottom, 8)
                 .frame(maxWidth: .infinity)
-                .background(AppColors.appBackground)
+                .background(Color.clear)
                 
                 ScrollView {
-                        LazyVStack(spacing: 20) {
-                            
-                            HeroWeatherCard()
-                                .padding(.top, 20)
+                    LazyVStack(spacing: 20) {
+                        
+                        HeroWeatherCard()
+                            .padding(.top, 20)
                             
                             SmartModesSection(activeMode: $activeMode)
                                 .padding(.vertical, 4)
@@ -76,7 +85,10 @@ struct HomeScreen: View {
                                             let roomsInFloor = getRoomsForFloor(floor.id)
                                             FloorSectionView(
                                                 floorName: "\(floor.name) • \(roomsInFloor.count) phòng",
-                                                rooms: roomsInFloor
+                                                rooms: roomsInFloor,
+                                                onRefresh: {
+                                                    loadFloorsAndRooms()
+                                                }
                                             )
                                         }
                                     }
@@ -97,12 +109,16 @@ struct HomeScreen: View {
                         }
                         .padding(.horizontal, 24)
                         .padding(.bottom, 30)
-                        .padding(.bottom, 20)
+                        .padding(.bottom, 80) // Space for bottom navigation
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         .onAppear {
+            loadFloorsAndRooms()
+        }
+        .onChange(of: selectedTab) { oldValue, newValue in
+            // Reload data when switching tabs
             loadFloorsAndRooms()
         }
     }
@@ -470,12 +486,24 @@ struct DevicesView: View {
 struct FloorSectionView: View {
     let floorName: String
     let rooms: [Room]
+    let onRefresh: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(floorName)
-                .font(AppTypography.titleMedium)
-                .foregroundColor(AppColors.textPrimary)
+            Button(action: {
+                onRefresh()
+            }) {
+                HStack {
+                    Text(floorName)
+                        .font(AppTypography.titleMedium)
+                        .foregroundColor(AppColors.textPrimary)
+                    
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
@@ -679,10 +707,7 @@ struct APITestSection: View {
 
 // MARK: - Preview
 #Preview {
-    NavigationView {
-        HomeScreen(onLogout: {
-            print("Logout in preview")
-        })
-    }
-    .navigationViewStyle(StackNavigationViewStyle())
+    HomeScreen(onLogout: {
+        print("Logout in preview")
+    })
 }

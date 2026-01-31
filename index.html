@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AC Detail Control</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-blue: #007aff;
+            --bg-light-blue: #eef4ff;
+            --text-dark: #333333;
+            --text-gray: #8e8e93;
+            --bg-main: #f8f9ff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-main);
+            display: flex;
+            justify-content: center;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 400px;
+            background: var(--bg-main);
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+        header h1 {
+            flex: 1;
+            text-align: center;
+            font-size: 18px;
+            margin-right: 24px; /* offset cho icon back */
+        }
+
+        /* Temperature Circle Section */
+        .temp-control-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .side-btn {
+            background: var(--bg-light-blue);
+            border-radius: 40px;
+            padding: 20px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            align-items: center;
+        }
+        
+        .swing-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            color: var(--text-gray);
+            font-size: 12px;
+        }
+        .swing-icon-wrapper {
+            background: #f0f0f0;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .circle-display {
+            position: relative;
+            width: 200px;
+            height: 200px;
+        }
+
+        .temp-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .temp-text h2 {
+            font-size: 48px;
+            margin: 0;
+            color: var(--text-dark);
+        }
+        .temp-text span {
+            color: var(--primary-blue);
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        /* Turn Off Button */
+        .btn-turn-off {
+            background: var(--primary-blue);
+            color: white;
+            width: 100%;
+            border: none;
+            padding: 18px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 15px rgba(0, 122, 255, 0.3);
+        }
+
+        /* Mode Section */
+        .section-label {
+            color: var(--text-gray);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .mode-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 40px;
+        }
+        .mode-item {
+            background: white;
+            border: 1px solid #e5e5ea;
+            padding: 10px 0;
+            text-align: center;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        .mode-item.active {
+            background: var(--bg-light-blue);
+            border-color: var(--primary-blue);
+            color: var(--primary-blue);
+        }
+
+        /* Fan Speed Section */
+        .fan-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .fan-level {
+            color: var(--primary-blue);
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .slider-container {
+            position: relative;
+            padding: 20px 0;
+        }
+        .slider-track {
+            height: 4px;
+            background: #e5e5ea;
+            border-radius: 2px;
+            position: relative;
+        }
+        .slider-progress {
+            width: 50%;
+            height: 100%;
+            background: var(--primary-blue);
+            position: absolute;
+        }
+        .slider-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--primary-blue);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            color: var(--text-gray);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header>
+        <i data-lucide="arrow-left"></i>
+        <h1>Điều hòa phòng server</h1>
+    </header>
+
+    <div class="temp-control-section">
+        <div class="side-btn">
+            <i data-lucide="plus" style="color: var(--primary-blue)"></i>
+            <div style="width: 20px; height: 2px; background: white;"></div>
+            <i data-lucide="minus" style="color: var(--primary-blue)"></i>
+        </div>
+
+        <div class="circle-display">
+            <svg width="200" height="200" viewBox="0 0 200 200">
+                <!-- Background arc -->
+                <path 
+                    d="M 40 160 A 80 80 0 1 1 160 160" 
+                    fill="none" 
+                    stroke="#e5e5ea" 
+                    stroke-width="12" 
+                    stroke-linecap="round"
+                />
+                <!-- Progress arc (represents temperature) -->
+                <path 
+                    d="M 40 160 A 80 80 0 0 1 130 46" 
+                    fill="none" 
+                    stroke="#007aff" 
+                    stroke-width="14" 
+                    stroke-linecap="round"
+                />
+                <!-- Thumb circle at end of progress -->
+                <circle cx="130" cy="46" r="8" fill="white" stroke="#007aff" stroke-width="3"/>
+            </svg>
+            <div class="temp-text">
+                <h2>25°</h2>
+                <span>COOL</span>
+            </div>
+        </div>
+
+        <div class="swing-btn">
+            <div class="swing-icon-wrapper">
+                <i data-lucide="wind"></i>
+            </div>
+            <span>Swing</span>
+        </div>
+    </div>
+
+    <button class="btn-turn-off">TURN OFF</button>
+
+    <span class="section-label">Mode</span>
+    <div class="mode-grid">
+        <div class="mode-item active">COOL</div>
+        <div class="mode-item">HEAT</div>
+        <div class="mode-item">DRY</div>
+        <div class="mode-item">FAN</div>
+        <div class="mode-item">AUTO</div>
+    </div>
+
+    <div class="fan-header">
+        <span class="section-label" style="margin: 0;">Fan Speed</span>
+        <span class="fan-level">Level 3</span>
+    </div>
+
+    <div class="slider-container">
+        <div class="slider-track">
+            <div class="slider-progress"></div>
+            <div class="slider-thumb"></div>
+        </div>
+        <div class="slider-labels">
+            <span>0</span>
+            <span>1</span>
+            <span>2</span>
+            <span>3</span>
+            <span>4</span>
+            <span>5</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Khởi tạo icon
+    lucide.createIcons();
+</script>
+
+</body>
+</html>
