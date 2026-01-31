@@ -8,9 +8,6 @@ struct RoomDetailUiState {
     var currentTemp: Double = 0.0
     var lights: [Light] = []
     var errorMessage: String? = nil
-    var apiResponse: String = ""
-    var toggleResponse: String = ""
-    var lightStatusResponse: String = ""
     var togglingLightIds: Set<Int> = [] // Track which lights are being toggled
 }
 
@@ -55,16 +52,9 @@ class RoomDetailViewModel: ObservableObject {
             uiState.lights = lights
             uiState.isLoadingLights = false
             
-            // Get raw API response for debugging
-            let rawResponse = try await SmartRoomAPIService.shared.getRawLightsByRoom(roomId)
-            uiState.apiResponse = rawResponse
-            
         } catch {
-            print("❌ API error for room \(roomId): \(error.localizedDescription)")
-            
             // Check if it's a token expiry error - don't show error message as app will logout automatically
             if let apiError = error as? SmartRoomAPIError, apiError == .tokenExpired {
-                print("🚨 Token expired while loading room data - auto logout will trigger")
                 uiState.isLoadingLights = false
                 return // Don't set error message, let the logout flow handle it
             }
@@ -89,40 +79,26 @@ class RoomDetailViewModel: ObservableObject {
         
         Task {
             do {
-                // Call toggle API and get raw response
-                let rawResponse = try await SmartRoomAPIService.shared.toggleLightAndGetResponse(lightId)
-                uiState.toggleResponse = rawResponse
+                // Call toggle API
+                _ = try await SmartRoomAPIService.shared.toggleLightAndGetResponse(lightId)
                 
                 // Refresh the specific light state to get updated status from server
                 let updatedLight = try await SmartRoomAPIService.shared.getLightById(lightId)
                 
-                // Get raw response from individual light API for comparison
-                let lightStatusRaw = try await SmartRoomAPIService.shared.getRawLightById(lightId)
-                
                 // Update UI state with actual server response
                 await MainActor.run {
                     uiState.lights[index] = updatedLight
-                    uiState.lightStatusResponse = lightStatusRaw
                 }
-                
-                print("✅ Toggle light \(lightId) successful - new state: \(updatedLight.isActive)")
                 
             } catch {
                 print("❌ API error when toggling light \(lightId): \(error.localizedDescription)")
                 
                 // Check if it's a token expiry error
                 if let apiError = error as? SmartRoomAPIError, apiError == .tokenExpired {
-                    print("🚨 Token expired while toggling light - auto logout will trigger")
                     await MainActor.run {
                         uiState.togglingLightIds.remove(lightId)
                     }
                     return // Don't set error message, let logout flow handle it
-                }
-                
-                // Show error in toggle response
-                await MainActor.run {
-                    uiState.toggleResponse = "❌ Lỗi: \(error.localizedDescription)"
-                    uiState.lightStatusResponse = "❌ Không thể lấy trạng thái đèn sau khi toggle"
                 }
             }
             
@@ -153,20 +129,12 @@ class RoomDetailViewModel: ObservableObject {
                     if level > 0 && !originalActive {
                         _ = try await SmartRoomAPIService.shared.updateLightState(lightId, isActive: true)
                     }
-                } else {
-                    print("❌ Failed to set light level for light \(lightId)")
                 }
             } catch {
-                print("❌ API error when setting light level for light \(lightId): \(error.localizedDescription)")
-                
                 // Check if it's a token expiry error
                 if let apiError = error as? SmartRoomAPIError, apiError == .tokenExpired {
-                    print("🚨 Token expired while setting light level - auto logout will trigger")
                     return // Don't revert state, let logout flow handle it
                 }
-                
-                // Don't update UI state on error - keep original state
-                print("❌ Failed to set light \(lightId) level to \(level)%")
             }
         }
     }
@@ -218,12 +186,6 @@ struct RoomDetailScreen: View {
                     
                     // DEVICE LIST
                     devicesSection
-                    
-                    // API RESPONSE SECTION
-                    apiResponseSection
-                    
-                    // TOGGLE RESPONSE SECTION
-                    toggleResponseSection
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 24)
@@ -342,145 +304,6 @@ struct RoomDetailScreen: View {
                         isToggling: viewModel.uiState.togglingLightIds.contains(light.id)
                     )
                 }
-            }
-        }
-    }
-    
-    private var apiResponseSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("API Response")
-                .font(AppTypography.titleMedium)
-                .fontWeight(.bold)
-                .foregroundColor(AppColors.textPrimary)
-            
-            Text("/api/v1/lights/room/\(viewModel.roomId)")
-                .font(.caption)
-                .foregroundColor(AppColors.textSecondary)
-                .padding(.bottom, 4)
-            
-            ScrollView {
-                if viewModel.uiState.isLoadingLights {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 8) {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: AppColors.primaryPurple))
-                            Text("Loading API response...")
-                                .font(.caption)
-                                .foregroundColor(AppColors.textSecondary)
-                        }
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 150)
-                } else {
-                    Text(viewModel.uiState.apiResponse)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(AppColors.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                }
-            }
-            .frame(height: 200)
-            .background(AppColors.surfaceLight)
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(AppColors.surfaceLight.opacity(0.3), lineWidth: 1)
-            )
-        }
-    }
-    
-    private var toggleResponseSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("API Responses Comparison")
-                .font(AppTypography.titleMedium)
-                .fontWeight(.bold)
-                .foregroundColor(AppColors.textPrimary)
-            
-            // Toggle Response
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Toggle Response")
-                    .font(AppTypography.bodyMedium)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.textPrimary)
-                
-                Text("/api/v1/lights/{id}/toggle-state")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
-                
-                ScrollView {
-                    if viewModel.uiState.toggleResponse.isEmpty {
-                        HStack {
-                            Spacer()
-                            VStack(spacing: 8) {
-                                Image(systemName: "lightswitch.on")
-                                    .font(.title2)
-                                    .foregroundColor(AppColors.textSecondary)
-                                Text("Toggle any light to see response")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 100)
-                    } else {
-                        Text(viewModel.uiState.toggleResponse)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(AppColors.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(8)
-                    }
-                }
-                .frame(height: 120)
-                .background(AppColors.surfaceLight)
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppColors.surfaceLight.opacity(0.3), lineWidth: 1)
-                )
-            }
-            
-            // Light Status Response
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Light Status Response")
-                    .font(AppTypography.bodyMedium)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.textPrimary)
-                
-                Text("/api/v1/lights/{id}")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
-                
-                ScrollView {
-                    if viewModel.uiState.lightStatusResponse.isEmpty {
-                        HStack {
-                            Spacer()
-                            VStack(spacing: 8) {
-                                Image(systemName: "info.circle")
-                                    .font(.title2)
-                                    .foregroundColor(AppColors.textSecondary)
-                                Text("Toggle any light to see status")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.textSecondary)
-                            }
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 100)
-                    } else {
-                        Text(viewModel.uiState.lightStatusResponse)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(AppColors.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(8)
-                    }
-                }
-                .frame(height: 120)
-                .background(AppColors.surfaceLight)
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppColors.surfaceLight.opacity(0.3), lineWidth: 1)
-                )
             }
         }
     }

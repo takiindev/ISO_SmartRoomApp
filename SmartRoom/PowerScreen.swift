@@ -130,74 +130,6 @@ struct PowerScreen: View {
                             }
                         }
                         
-                        // Debug Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            Button(action: {
-                                withAnimation {
-                                    viewModel.showDebugInfo.toggle()
-                                }
-                            }) {
-                                HStack {
-                                    Text("🐛 Debug API Response")
-                                        .font(AppTypography.titleMedium)
-                                        .foregroundColor(AppColors.textSecondary)
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: viewModel.showDebugInfo ? "chevron.up" : "chevron.down")
-                                        .foregroundColor(AppColors.textSecondary)
-                                }
-                            }
-                            .padding(.horizontal, 24)
-                            
-                            if viewModel.showDebugInfo {
-                                // Sensors API Response
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("GET /rooms/\(room.id)/power-consumptions")
-                                        .font(.caption)
-                                        .foregroundColor(AppColors.textSecondary)
-                                        .padding(.horizontal, 24)
-                                    
-                                    ScrollView(.horizontal, showsIndicators: true) {
-                                        Text(viewModel.debugSensorsResponse)
-                                            .font(.system(size: 11, design: .monospaced))
-                                            .foregroundColor(AppColors.textPrimary)
-                                            .padding(12)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .frame(maxHeight: 200)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.black.opacity(0.05))
-                                    )
-                                    .padding(.horizontal, 24)
-                                }
-                                
-                                // Chart Data API Response
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("GET /rooms/\(room.id)/power-consumption-values/sum")
-                                        .font(.caption)
-                                        .foregroundColor(AppColors.textSecondary)
-                                        .padding(.horizontal, 24)
-                                        .padding(.top, 12)
-                                    
-                                    ScrollView(.horizontal, showsIndicators: true) {
-                                        Text(viewModel.debugAPIResponse)
-                                            .font(.system(size: 11, design: .monospaced))
-                                            .foregroundColor(AppColors.textPrimary)
-                                            .padding(12)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .frame(maxHeight: 200)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.black.opacity(0.05))
-                                    )
-                                    .padding(.horizontal, 24)
-                                }
-                            }
-                        }
-                        
                         // Bottom padding
                         Rectangle()
                             .frame(height: 32)
@@ -642,9 +574,6 @@ class PowerViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var isChartLoading: Bool = false
     @Published var errorMessage: String? = nil
-    @Published var debugAPIResponse: String = "Chưa có dữ liệu"
-    @Published var debugSensorsResponse: String = "Chưa có dữ liệu"
-    @Published var showDebugInfo: Bool = false
     
     func loadSensors(for roomId: Int) {
         Task {
@@ -658,46 +587,20 @@ class PowerViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            print("📡 Calling API: /rooms/\(roomId)/power-consumptions")
-            
             // Gọi API thật để lấy danh sách cảm biến công suất
             let loadedSensors = try await SmartRoomAPIService.shared.getPowerSensorsByRoom(roomId)
-            
-            // Get raw API response for debug
-            do {
-                let rawResponse = try await SmartRoomAPIService.shared.getRawPowerSensorsByRoom(roomId)
-                debugSensorsResponse = rawResponse
-            } catch {
-                debugSensorsResponse = "Error getting raw response: \(error.localizedDescription)"
-            }
             
             sensors = loadedSensors
             // Tự động chọn tất cả sensors khi load
             selectedSensorIds = Set(sensors.map { $0.id })
             isLoading = false
             
-            print("✅ Loaded \(sensors.count) power sensors for room \(roomId)")
-            if sensors.isEmpty {
-                print("⚠️ No power sensors found for room \(roomId)")
-            } else {
-                sensors.forEach { sensor in
-                    print("  - Sensor ID: \(sensor.id), Name: \(sensor.name), Active: \(sensor.isActive), Watt: \(sensor.currentWatt ?? 0)W")
-                }
-            }
-            
         } catch SmartRoomAPIError.tokenExpired {
             isLoading = false
-            print("🚨 Token expired while loading sensors - auto logout will trigger")
             // Don't set error message, let logout flow handle it
             
         } catch {
-            print("❌ API error when loading sensors: \(error.localizedDescription)")
-            print("❌ Error type: \(type(of: error))")
-            if let apiError = error as? SmartRoomAPIError {
-                print("❌ SmartRoomAPIError: \(apiError)")
-            }
             errorMessage = "Không thể tải danh sách cảm biến: \(error.localizedDescription)"
-            debugSensorsResponse = "Error: \(error.localizedDescription)\nType: \(type(of: error))"
             isLoading = false
         }
     }
@@ -720,7 +623,6 @@ class PowerViewModel: ObservableObject {
     private func performLoadChartData(for roomId: Int, startDate: Date, endDate: Date) async {
         // Chỉ load chart data nếu có sensors được chọn
         guard !selectedSensorIds.isEmpty else {
-            print("⏭️ No sensors selected, clearing chart data")
             chartData = []
             return
         }
@@ -746,10 +648,6 @@ class PowerViewModel: ObservableObject {
         let startDateStr = isoFormatter.string(from: startDateTime)
         let endDateStr = isoFormatter.string(from: endDateTime)
         
-        print("📊 Loading chart data for room \(roomId)")
-        print("📊 From: \(startDateStr) To: \(endDateStr)")
-        print("📊 Selected sensor IDs: \(selectedSensorIds)")
-        
         do {
             // Gọi API để lấy dữ liệu lịch sử công suất
             let historyData = try await SmartRoomAPIService.shared.getPowerConsumptionHistory(
@@ -758,26 +656,15 @@ class PowerViewModel: ObservableObject {
                 to: endDateStr
             )
             
-            // Lưu debug info
-            let debugInfo = "Total: \(historyData.count) data points\n\n" +
-                historyData.prefix(20).enumerated().map { index, point in
-                    "[\(index + 1)] \(point.timestamp) -> \(String(format: "%.2f", point.sumWatt))W"
-                }.joined(separator: "\n") +
-                (historyData.count > 20 ? "\n\n... và \(historyData.count - 20) điểm nữa" : "")
-            debugAPIResponse = debugInfo
-            
             // Xử lý dữ liệu thành hourly data points
             chartData = processHourlyData(historyData: historyData)
             
             isChartLoading = false
-            print("✅ Chart data loaded: \(chartData.count) hourly data points")
             
         } catch SmartRoomAPIError.tokenExpired {
             isChartLoading = false
-            print("🚨 Token expired while loading chart data")
         } catch {
             isChartLoading = false
-            print("❌ Error loading chart data: \(error.localizedDescription)")
             chartData = []
         }
     }

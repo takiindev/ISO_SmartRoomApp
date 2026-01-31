@@ -17,10 +17,6 @@ struct HomeScreenContent: View {
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
     
-    // API Test State
-    @State private var apiTestResponse: String = "Chưa test API..."
-    @State private var isTestingAPI: Bool = false
-    
     // API data
     @State private var floors: [Floor] = []
     @State private var allRooms: [Room] = []
@@ -72,12 +68,7 @@ struct HomeScreenContent: View {
                                 }
                             } else if selectedTab == 0 {
                                 VStack(spacing: 16) {
-                                    DebugInfoView(
-                                        floors: floors,
-                                        rooms: allRooms,
-                                        isLoading: isLoading
-                                    )
-                                    
+
                                     if floors.isEmpty {
                                         EmptyFloorsView()
                                     } else {
@@ -96,16 +87,6 @@ struct HomeScreenContent: View {
                             } else {
                                 DevicesView()
                             }
-                            
-                            // API TEST SECTION
-                            APITestSection(
-                                apiResponse: apiTestResponse,
-                                isTesting: isTestingAPI,
-                                onTestAPI: {
-                                    testFloorsAPI()
-                                }
-                            )
-                            .padding(.top, 12)
                         }
                         .padding(.horizontal, 24)
                         .padding(.bottom, 30)
@@ -170,53 +151,6 @@ struct HomeScreenContent: View {
     
     private func getRoomsForFloor(_ floorId: Int) -> [Room] {
         allRooms.filter { $0.floorId == floorId }
-    }
-    
-    // ======================
-    // API TEST LOGIC
-    // ======================
-    private func testFloorsAPI() {
-        Task { await performAPITest() }
-    }
-    
-    @MainActor
-    private func performAPITest() async {
-        isTestingAPI = true
-        apiTestResponse = "🔄 Đang gọi API GET /floors...\n"
-        
-        let service = SmartRoomAPIService.shared
-        
-        do {
-            let floors = try await service.getFloors()
-            
-            var text = ""
-            text += "🏢 FLOORS API RESPONSE\n"
-            text += "============================\n"
-            text += "Total floors: \(floors.count)\n\n"
-            
-            for (index, floor) in floors.enumerated() {
-                text += "\(index + 1). \(floor.name)\n"
-                text += "   • id: \(floor.id)\n"
-                
-                if let desc = floor.description, !desc.isEmpty {
-                    text += "   • description: \(desc)\n"
-                }
-                
-                text += "\n"
-            }
-            
-            apiTestResponse = text
-            
-        } catch {
-            apiTestResponse =
-            """
-            ❌ FLOORS API ERROR
-            -------------------
-            \(error.localizedDescription)
-            """
-        }
-        
-        isTestingAPI = false
     }
 }
 
@@ -426,42 +360,6 @@ struct ErrorView: View {
     }
 }
 
-// MARK: - Debug Info View
-struct DebugInfoView: View {
-    let floors: [Floor]
-    let rooms: [Room]
-    let isLoading: Bool
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("📀 Debug Info:")
-                .font(AppTypography.bodyMedium)
-                .foregroundColor(AppColors.textSecondary)
-            
-            Text("• \(floors.count) tầng")
-                .font(AppTypography.bodyMedium)
-                .foregroundColor(AppColors.textSecondary)
-            
-            Text("• \(rooms.count) phòng")
-                .font(AppTypography.bodyMedium)
-                .foregroundColor(AppColors.textSecondary)
-            
-            if isLoading {
-                Text("• Đang tải...")
-                    .font(AppTypography.bodyMedium)
-                    .foregroundColor(AppColors.primaryPurple)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(AppColors.surfaceWhite)
-                .shadow(color: AppColors.textSecondary.opacity(0.1), radius: 2, x: 0, y: 1)
-        )
-    }
-}
-
 // MARK: - Empty Floors View
 struct EmptyFloorsView: View {
     var body: some View {
@@ -635,79 +533,9 @@ struct RoomCard: View {
     }
 }
 
-// MARK: - API Test Section
-struct APITestSection: View {
-    let apiResponse: String
-    let isTesting: Bool
-    let onTestAPI: () -> Void
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("🧪 API Test")
-                    .font(AppTypography.titleMedium)
-                    .foregroundColor(AppColors.textPrimary)
-                
-                Spacer()
-                
-                Button(action: onTestAPI) {
-                    HStack(spacing: 8) {
-                        if isTesting {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                                .progressViewStyle(CircularProgressViewStyle(tint: AppColors.surfaceWhite))
-                        } else {
-                            Image(systemName: "play.fill")
-                        }
-                        
-                        Text(isTesting ? "Testing..." : "Test API")
-                    }
-                    .font(AppTypography.bodyMedium)
-                    .foregroundColor(AppColors.surfaceWhite)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(isTesting ? AppColors.textSecondary : AppColors.primaryPurple)
-                    )
-                }
-                .disabled(isTesting)
-            }
-            
-            ScrollView {
-                Text(apiResponse)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(AppColors.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .padding(12)
-            }
-            .frame(height: 200)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(AppColors.surfaceLight)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(AppColors.textSecondary.opacity(0.2), lineWidth: 1)
-                    )
-            )
-            
-            Text("Flow: GET /api/v1/floors → GET /api/v1/floors/{id}/rooms")
-                .font(AppTypography.bodyMedium)
-                .foregroundColor(AppColors.textSecondary)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(AppColors.surfaceWhite)
-                .shadow(color: AppColors.textSecondary.opacity(0.1), radius: 6, x: 0, y: 3)
-        )
-    }
-}
-
 // MARK: - Preview
 #Preview {
     HomeScreen(onLogout: {
-        print("Logout in preview")
+        // Logout action
     })
 }
