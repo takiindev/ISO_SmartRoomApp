@@ -20,8 +20,6 @@ struct LoginView: View {
     @State private var isLoading: Bool = false
     @State private var errorMessage: String = ""
     @State private var showErrorAlert: Bool = false
-    @State private var debugMessage: String = ""
-    @State private var showDebugAlert: Bool = false
     
     var body: some View {
         ZStack {
@@ -126,31 +124,6 @@ struct LoginView: View {
                     .opacity(isLoading ? 0.7 : 1.0)
                     .padding(.top, 20)
                     
-                    // Debug + Demo Login
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Debug Info:")
-                            .font(.caption)
-                            .foregroundColor(.yellow)
-                        
-                        if !debugMessage.isEmpty {
-                            ScrollView {
-                                Text(debugMessage)
-                                    .font(.caption2)
-                                    .foregroundColor(.green)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            .frame(maxHeight: 60)
-                        }
-                        
-                        Button("Test Demo Login") { demoLogin() }
-                            .font(.caption)
-                            .foregroundColor(.yellow)
-                            .padding(4)
-                            .background(Color.blue.opacity(0.3))
-                            .cornerRadius(4)
-                    }
-                    .padding(.vertical, 10)
-                    
                     HStack {
                         Text("New user?")
                             .foregroundColor(.white)
@@ -167,11 +140,6 @@ struct LoginView: View {
                     Button("OK") { showErrorAlert = false }
                 } message: {
                     Text(errorMessage)
-                }
-                .alert("Debug Info", isPresented: $showDebugAlert) {
-                    Button("OK") { showDebugAlert = false }
-                } message: {
-                    Text(debugMessage)
                 }
             }
         }
@@ -199,7 +167,6 @@ struct LoginView: View {
         
         SmartRoomAPIService.shared.setBaseURL(apiURL)
         isLoading = true
-        debugMessage = "Starting login...\nUsername: \(emailOrUsername)\nAPI: \(apiURL)/auth/signin"
         
         Task {
             do {
@@ -216,44 +183,12 @@ struct LoginView: View {
                         TokenManager.shared.clearCredentials()
                     }
                     
-                    debugMessage = "✅ LOGIN SUCCESS!\nToken saved\nUser: \(loginData.username)\nGroups: \(loginData.groups.joined(separator: ", "))"
                     onLoginSuccess()
                 }
             } catch {
                 await MainActor.run {
                     isLoading = false
                     showError("Login failed: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    
-    /// Login demo
-    private func demoLogin() {
-        debugMessage = "🔧 DEMO MODE: demo/demo123"
-        isLoading = true
-        SmartRoomAPIService.shared.setBaseURL(apiURL)
-        
-        Task {
-            do {
-                let loginData = try await SmartRoomAPIService.shared.login(username: "demo", password: "demo123")
-                await MainActor.run {
-                    isLoading = false
-                    TokenManager.shared.saveToken(loginData.token)
-                    TokenManager.shared.saveGroups(loginData.groups)
-                    TokenManager.shared.saveCurrentUsername(loginData.username)
-                    
-                    if rememberMe {
-                        TokenManager.shared.saveCredentials(username: "demo", password: "demo123", apiURL: apiURL)
-                    }
-                    
-                    onLoginSuccess()
-                }
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    debugMessage = "❌ DEMO FAILED: \(error.localizedDescription)"
-                    showDebugAlert = true
                 }
             }
         }

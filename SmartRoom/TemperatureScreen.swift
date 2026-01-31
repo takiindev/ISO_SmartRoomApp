@@ -130,43 +130,6 @@ struct TemperatureScreen: View {
                             }
                         }
                         
-                        // Debug Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            Button(action: {
-                                withAnimation {
-                                    viewModel.showDebugInfo.toggle()
-                                }
-                            }) {
-                                HStack {
-                                    Text("🐛 Debug API Response")
-                                        .font(AppTypography.titleMedium)
-                                        .foregroundColor(AppColors.textSecondary)
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: viewModel.showDebugInfo ? "chevron.up" : "chevron.down")
-                                        .foregroundColor(AppColors.textSecondary)
-                                }
-                            }
-                            .padding(.horizontal, 24)
-                            
-                            if viewModel.showDebugInfo {
-                                ScrollView(.horizontal, showsIndicators: true) {
-                                    Text(viewModel.debugAPIResponse)
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .foregroundColor(AppColors.textPrimary)
-                                        .padding(12)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .frame(maxHeight: 300)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.black.opacity(0.05))
-                                )
-                                .padding(.horizontal, 24)
-                            }
-                        }
-                        
                         // Bottom padding
                         Rectangle()
                             .frame(height: 32)
@@ -622,8 +585,6 @@ class TemperatureViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var isChartLoading: Bool = false
     @Published var errorMessage: String? = nil
-    @Published var debugAPIResponse: String = "Chưa có dữ liệu"
-    @Published var showDebugInfo: Bool = false
     
     func loadSensors(for roomId: Int) {
         Task {
@@ -645,15 +606,11 @@ class TemperatureViewModel: ObservableObject {
             selectedSensorIds = Set(sensors.map { $0.id })
             isLoading = false
             
-            print("✅ Loaded \(sensors.count) temperature sensors for room \(roomId)")
-            
         } catch SmartRoomAPIError.tokenExpired {
             isLoading = false
-            print("🚨 Token expired while loading sensors - auto logout will trigger")
             // Don't set error message, let logout flow handle it
             
         } catch {
-            print("❌ API error when loading sensors: \(error.localizedDescription)")
             errorMessage = "Không thể tải danh sách cảm biến: \(error.localizedDescription)"
             isLoading = false
         }
@@ -677,7 +634,6 @@ class TemperatureViewModel: ObservableObject {
     private func performLoadChartData(for roomId: Int, startDate: Date, endDate: Date) async {
         // Chỉ load chart data nếu có sensors được chọn
         guard !selectedSensorIds.isEmpty else {
-            print("⏭️ No sensors selected, clearing chart data")
             chartData = []
             return
         }
@@ -703,10 +659,6 @@ class TemperatureViewModel: ObservableObject {
         let startDateStr = isoFormatter.string(from: startDateTime)
         let endDateStr = isoFormatter.string(from: endDateTime)
         
-        print("📊 Loading chart data for room \(roomId)")
-        print("📊 From: \(startDateStr) To: \(endDateStr)")
-        print("📊 Selected sensor IDs: \(selectedSensorIds)")
-        
         do {
             // Gọi API để lấy dữ liệu lịch sử nhiệt độ
             let historyData = try await SmartRoomAPIService.shared.getTemperatureHistory(
@@ -715,26 +667,15 @@ class TemperatureViewModel: ObservableObject {
                 endedAt: endDateStr
             )
             
-            // Lưu debug info
-            let debugInfo = "Total: \(historyData.count) data points\n\n" +
-                historyData.prefix(20).enumerated().map { index, point in
-                    "[\(index + 1)] \(point.timestamp) -> \(String(format: "%.2f", point.avgTempC))°C"
-                }.joined(separator: "\n") +
-                (historyData.count > 20 ? "\n\n... và \(historyData.count - 20) điểm nữa" : "")
-            debugAPIResponse = debugInfo
-            
             // Xử lý dữ liệu thành hourly data points
             chartData = processHourlyData(historyData: historyData)
             
             isChartLoading = false
-            print("✅ Chart data loaded: \(chartData.count) hourly data points")
             
         } catch SmartRoomAPIError.tokenExpired {
             isChartLoading = false
-            print("🚨 Token expired while loading chart data")
         } catch {
             isChartLoading = false
-            print("❌ Error loading chart data: \(error.localizedDescription)")
             chartData = []
         }
     }
