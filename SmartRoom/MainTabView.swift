@@ -13,7 +13,7 @@ struct MainTabView: View {
                 HomeScreenContent(onLogout: onLogout)
                     .tag(0)
                 
-                ACControlScreen()
+                AlertScreen()
                     .tag(1)
                 
                 PropertiesScreen()
@@ -49,8 +49,8 @@ struct BottomNavigationBar: View {
             }
             
             NavigationItem(
-                icon: "snowflake",
-                title: "AC Control",
+                icon: "bell.badge.fill",
+                title: "Alerts",
                 isActive: selectedTab == 1
             ) {
                 withAnimation(.easeInOut(duration: 0.3)) {

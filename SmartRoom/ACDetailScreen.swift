@@ -50,9 +50,28 @@ struct ACDetailScreen: View {
         ZStack {
             AppColors.appBackground.ignoresSafeArea(.all)
             
-            VStack(spacing: 0) {
-                // Header
-                HStack {
+            if isLoadingDetails {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: AppColors.primaryPurple))
+                        .scaleEffect(1.5)
+                    Text("Đang tải...")
+                        .foregroundColor(AppColors.textSecondary)
+                }
+            } else {
+                mainContentView
+            }
+        }
+        .navigationBarHidden(true)
+        .onAppear {
+            loadACDetails()
+        }
+    }
+    
+    private var mainContentView: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
                     Button(action: {
                         dismiss()
                     }) {
@@ -306,164 +325,123 @@ struct ACDetailScreen: View {
                 }
             }
         }
-        .navigationBarHidden(true)
-        .onAppear {
-            temperature = device.temperature
-            selectedMode = device.mode
-            isPowerOn = device.isOn
-            loadDeviceDetails()
-        }
-    }
-    
-    private func loadDeviceDetails() {
-        isLoadingDetails = true
-        Task {
-            do {
-                let acDetails = try await SmartRoomAPIService.shared.getAirConditionById(device.id)
-                
-                await MainActor.run {
-                    isPowerOn = acDetails.power == "ON"
-                    temperature = acDetails.temperature
-                    selectedMode = acDetails.mode
-                    fanSpeed = acDetails.fanSpeed
-                    swingOn = acDetails.swing == "ON"
-                    isLoadingDetails = false
-                }
-            } catch {
-                await MainActor.run {
-                    isLoadingDetails = false
-                }
-                print("❌ Failed to load AC details \(device.id): \(error.localizedDescription)")
-            }
-        }
-    }
     
     private func updateTemperature(newValue: Int) {
-        let previousValue = temperature
         temperature = newValue
         isUpdatingTemperature = true
         
         Task {
             do {
-                let updatedAC = try await SmartRoomAPIService.shared.updateTemperature(device.id, temperature: newValue)
-                
-                await MainActor.run {
-                    temperature = updatedAC.temperature
-                    isPowerOn = updatedAC.power == "ON"
-                    selectedMode = updatedAC.mode
-                    isUpdatingTemperature = false
-                }
+                _ = try await SmartRoomAPIService.shared.updateTemperature(device.id, temperature: newValue)
             } catch {
-                // Revert to previous value on error
-                await MainActor.run {
-                    temperature = previousValue
-                    isUpdatingTemperature = false
-                }
-                print("❌ Failed to update temperature \(device.id): \(error.localizedDescription)")
+                print("⚠️ Failed to update temperature: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                isUpdatingTemperature = false
             }
         }
     }
     
     private func updateMode(newMode: String) {
-        let previousMode = selectedMode
         selectedMode = newMode
         isUpdatingMode = true
         
         Task {
             do {
-                let updatedAC = try await SmartRoomAPIService.shared.updateMode(device.id, mode: newMode)
-                
-                await MainActor.run {
-                    selectedMode = updatedAC.mode
-                    isPowerOn = updatedAC.power == "ON"
-                    temperature = updatedAC.temperature
-                    isUpdatingMode = false
-                }
+                _ = try await SmartRoomAPIService.shared.updateMode(device.id, mode: newMode)
             } catch {
-                // Revert to previous mode on error
-                await MainActor.run {
-                    selectedMode = previousMode
-                    isUpdatingMode = false
-                }
-                print("❌ Failed to update mode \(device.id): \(error.localizedDescription)")
+                print("⚠️ Failed to update mode: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                isUpdatingMode = false
             }
         }
     }
     
     private func updateFanSpeed(newSpeed: Int) {
+        fanSpeed = newSpeed
         isUpdatingFanSpeed = true
         
         Task {
             do {
-                // Fan speed: 0 means AUTO, API accepts 0-5
-                let updatedAC = try await SmartRoomAPIService.shared.updateFanSpeed(device.id, speed: newSpeed)
-                
-                await MainActor.run {
-                    fanSpeed = updatedAC.fanSpeed
-                    isPowerOn = updatedAC.power == "ON"
-                    isUpdatingFanSpeed = false
-                }
+                _ = try await SmartRoomAPIService.shared.updateFanSpeed(device.id, speed: newSpeed)
             } catch {
-                // Revert to default speed (3) on error
-                await MainActor.run {
-                    fanSpeed = 3
-                    isUpdatingFanSpeed = false
-                }
-                print("❌ Failed to update fan speed \(device.id): \(error.localizedDescription)")
+                print("⚠️ Failed to update fan speed: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                isUpdatingFanSpeed = false
             }
         }
     }
     
     private func updateSwing(newState: Bool) {
-        let previousState = swingOn
         swingOn = newState
         isUpdatingSwing = true
         
         Task {
+            let state = newState ? "ON" : "OFF"
             do {
-                let state = newState ? "ON" : "OFF"
-                let updatedAC = try await SmartRoomAPIService.shared.updateSwing(device.id, state: state)
+                _ = try await SmartRoomAPIService.shared.updateSwing(device.id, state: state)
+            } catch {
+                print("⚠️ Failed to update swing: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                isUpdatingSwing = false
+            }
+        }
+    }
+    
+    private func loadACDetails() {
+        Task {
+            isLoadingDetails = true
+            
+            do {
+                let ac = try await SmartRoomAPIService.shared.getAirConditionById(device.id)
                 
                 await MainActor.run {
-                    swingOn = updatedAC.swing == "ON"
-                    isPowerOn = updatedAC.power == "ON"
-                    isUpdatingSwing = false
+                    temperature = ac.temperature
+                    selectedMode = ac.mode
+                    fanSpeed = ac.fanSpeed
+                    swingOn = ac.swing == "ON"
+                    isPowerOn = ac.power == "ON"
+                    isLoadingDetails = false
                 }
             } catch {
-                // Revert to previous state on error
+                // Use device data as fallback
                 await MainActor.run {
-                    swingOn = previousState
-                    isUpdatingSwing = false
+                    temperature = device.temperature
+                    selectedMode = device.mode
+                    fanSpeed = device.fanSpeed
+                    swingOn = device.swing == "ON"
+                    isPowerOn = device.isOn
+                    isLoadingDetails = false
                 }
-                print("❌ Failed to update swing \(device.id): \(error.localizedDescription)")
+                print("❌ Failed to load AC details: \(error.localizedDescription)")
             }
         }
     }
     
     private func togglePower() {
-        let previousState = isPowerOn
-        isPowerOn.toggle()
+        withAnimation {
+            isPowerOn.toggle()
+        }
+        
         isTogglingPower = true
         
         Task {
+            let power = isPowerOn ? "ON" : "OFF"
             do {
-                let power = isPowerOn ? "ON" : "OFF"
-                let updatedAC = try await SmartRoomAPIService.shared.updateAirCondition(device.id, power: power)
-                
-                // Update state with response from server
-                await MainActor.run {
-                    isPowerOn = updatedAC.power == "ON"
-                    temperature = updatedAC.temperature
-                    selectedMode = updatedAC.mode
-                    isTogglingPower = false
-                }
+                _ = try await SmartRoomAPIService.shared.updateAirCondition(device.id, power: power)
             } catch {
-                // Revert to previous state on error
-                await MainActor.run {
-                    isPowerOn = previousState
-                    isTogglingPower = false
-                }
-                print("❌ Failed to toggle AC power \(device.id): \(error.localizedDescription)")
+                print("⚠️ Failed to toggle power: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                isTogglingPower = false
             }
         }
     }

@@ -7,6 +7,8 @@ struct ACDevice: Identifiable {
     var temperature: Int
     var mode: String
     var isOn: Bool
+    var fanSpeed: Int
+    var swing: String
     
     init(from ac: AirCondition) {
         self.id = ac.id
@@ -14,6 +16,8 @@ struct ACDevice: Identifiable {
         self.temperature = ac.temperature
         self.mode = ac.mode
         self.isOn = ac.power == "ON"
+        self.fanSpeed = ac.fanSpeed
+        self.swing = ac.swing
     }
 }
 
@@ -198,9 +202,16 @@ struct ACControlScreen: View {
             print("⚠️ Cannot reload invalid floor index: \(index)")
             return 
         }
+        
+        // Prevent multiple simultaneous loads
+        guard !isLoadingFloor else {
+            print("⚠️ Already loading floor data, ignoring tap")
+            return
+        }
+        
         print("🔄 Reloading floor \(index): \(floors[index].name)")
-        // Clear rooms and mark as not loaded to force reload
-        floors[index].rooms = []
+        // Mark as not loaded to force reload, but don't clear rooms yet
+        // This prevents "Index out of range" errors while UI is still rendering
         floors[index].isLoaded = false
         Task { await performFloorLoad(at: index) }
     }
@@ -212,8 +223,7 @@ struct ACControlScreen: View {
             return 
         }
         print("🔄 Pull-to-refresh floor \(selectedFloorIndex): \(floors[selectedFloorIndex].name)")
-        // Clear rooms and reload current floor
-        floors[selectedFloorIndex].rooms = []
+        // Mark as not loaded to force reload without clearing (prevents index errors)
         floors[selectedFloorIndex].isLoaded = false
         await performFloorLoad(at: selectedFloorIndex)
     }
@@ -252,6 +262,12 @@ struct ACControlScreen: View {
             return 
         }
         
+        // Prevent concurrent loads
+        guard !isLoadingFloor else {
+            print("⚠️ Floor load already in progress, skipping")
+            return
+        }
+        
         isLoadingFloor = true
         let service = SmartRoomAPIService.shared
         let floorId = floors[index].id
@@ -274,13 +290,14 @@ struct ACControlScreen: View {
                 floors[index].rooms = acRooms
                 floors[index].isLoaded = true
             }
-            isLoadingFloor = false
             
         } catch {
             print("❌ Error loading floor \(index): \(error.localizedDescription)")
-            isLoadingFloor = false
             // Could add per-floor error handling here if needed
         }
+        
+        // Always reset loading flag
+        isLoadingFloor = false
     }
 }
 
@@ -436,11 +453,18 @@ struct ACRoomCard: View {
 struct ACDeviceRow: View {
     @Binding var device: ACDevice
     @State private var isToggling: Bool = false
+    @State private var navigateToDetail: Bool = false
     
     var body: some View {
-        HStack(spacing: 15) {
-            // Navigable area - Icon + Info
-            NavigationLink(destination: ACDetailScreen(device: device)) {
+        ZStack {
+            // Hidden NavigationLink for programmatic navigation
+            NavigationLink(destination: ACDetailScreen(device: device), isActive: $navigateToDetail) {
+                EmptyView()
+            }
+            .hidden()
+            
+            HStack(spacing: 15) {
+                // Icon + Info area
                 HStack(spacing: 15) {
                     // Icon Circle
                     ZStack {
@@ -465,59 +489,51 @@ struct ACDeviceRow: View {
                             .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
                     }
                 }
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            Spacer()
-            
-            // Toggle Switch - independent from NavigationLink
-            ZStack {
-                if isToggling {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                } else {
-                    Toggle("", isOn: Binding(
-                        get: { device.isOn },
-                        set: { newValue in
-                            toggleDevice(newValue: newValue)
-                        }
-                    ))
-                    .toggleStyle(SwitchToggleStyle(tint: Color(red: 0.0, green: 0.48, blue: 1.0)))
-                    .scaleEffect(0.9)
-                    .disabled(isToggling)
+                
+                Spacer()
+                
+                // Toggle Switch - independent control
+                ZStack {
+                    if isToggling {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    } else {
+                        Toggle("", isOn: $device.isOn)
+                            .toggleStyle(SwitchToggleStyle(tint: Color(red: 0.0, green: 0.48, blue: 1.0)))
+                            .scaleEffect(0.9)
+                            .disabled(isToggling)
+                            .onChange(of: device.isOn) { oldValue, newValue in
+                                if !isToggling && oldValue != newValue {
+                                    sendToggleToServer(newValue: newValue, previousValue: oldValue)
+                                }
+                            }
+                    }
                 }
+                .frame(width: 51, height: 31)
             }
-            .frame(width: 51, height: 31)
+            .padding(15)
+            .background(Color(red: 0.95, green: 0.96, blue: 1.0))
+            .cornerRadius(15)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                navigateToDetail = true
+            }
         }
-        .padding(15)
-        .background(Color(red: 0.95, green: 0.96, blue: 1.0))
-        .cornerRadius(15)
     }
     
-    private func toggleDevice(newValue: Bool) {
-        let previousState = device.isOn
-        device.isOn = newValue
+    private func sendToggleToServer(newValue: Bool, previousValue: Bool) {
         isToggling = true
         
         Task {
+            let power = newValue ? "ON" : "OFF"
             do {
-                let power = newValue ? "ON" : "OFF"
-                let updatedAC = try await SmartRoomAPIService.shared.updateAirCondition(device.id, power: power)
-                
-                // Update device with response from server
-                await MainActor.run {
-                    device.isOn = updatedAC.power == "ON"
-                    device.temperature = updatedAC.temperature
-                    device.mode = updatedAC.mode
-                    isToggling = false
-                }
+                _ = try await SmartRoomAPIService.shared.updateAirCondition(device.id, power: power)
             } catch {
-                // Revert to previous state on error
-                await MainActor.run {
-                    device.isOn = previousState
-                    isToggling = false
-                }
-                print("❌ Failed to toggle AC \(device.id): \(error.localizedDescription)")
+                print("⚠️ Failed to send toggle to server: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                isToggling = false
             }
         }
     }
