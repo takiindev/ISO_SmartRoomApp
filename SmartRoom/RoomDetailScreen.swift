@@ -4,11 +4,14 @@ import SwiftUI
 struct RoomDetailUiState {
     var isLoading: Bool = true
     var isLoadingLights: Bool = true
+    var isLoadingACs: Bool = true
     var roomName: String = ""
     var currentTemp: Double = 0.0
     var lights: [Light] = []
+    var airConditioners: [ACDevice] = []
     var errorMessage: String? = nil
     var togglingLightIds: Set<Int> = [] // Track which lights are being toggled
+    var togglingACIds: Set<Int> = [] // Track which ACs are being toggled
 }
 
 // MARK: - Room Detail ViewModel
@@ -46,16 +49,23 @@ class RoomDetailViewModel: ObservableObject {
             
             // Set lights loading state
             uiState.isLoadingLights = true
+            uiState.isLoadingACs = true
             
             // Try to get lights from API
             let lights = try await SmartRoomAPIService.shared.getLightsByRoom(roomId)
             uiState.lights = lights
             uiState.isLoadingLights = false
             
+            // Try to get air conditioners from API
+            let acs = try await SmartRoomAPIService.shared.getAirConditionsByRoom(roomId)
+            uiState.airConditioners = acs.map { ACDevice(from: $0) }
+            uiState.isLoadingACs = false
+            
         } catch {
             // Check if it's a token expiry error - don't show error message as app will logout automatically
             if let apiError = error as? SmartRoomAPIError, apiError == .tokenExpired {
                 uiState.isLoadingLights = false
+                uiState.isLoadingACs = false
                 return // Don't set error message, let the logout flow handle it
             }
             
@@ -65,6 +75,7 @@ class RoomDetailViewModel: ObservableObject {
             
             // Show error message instead of fake data
             uiState.isLoadingLights = false
+            uiState.isLoadingACs = false
             uiState.errorMessage = "Không thể tải dữ liệu: \(error.localizedDescription)"
         }
     }
@@ -139,6 +150,46 @@ class RoomDetailViewModel: ObservableObject {
         }
     }
     
+    // Reload ACs only
+    func reloadACs() {
+        Task {
+            do {
+                let acs = try await SmartRoomAPIService.shared.getAirConditionsByRoom(roomId)
+                await MainActor.run {
+                    uiState.airConditioners = acs.map { ACDevice(from: $0) }
+                }
+            } catch {
+                print("⚠️ Failed to reload ACs: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    // Toggle AC
+    func toggleAC(_ acId: Int) {
+        guard let index = uiState.airConditioners.firstIndex(where: { $0.id == acId }) else { return }
+        
+        // Add to toggling set
+        uiState.togglingACIds.insert(acId)
+        
+        // Toggle state immediately
+        uiState.airConditioners[index].isOn.toggle()
+        let newState = uiState.airConditioners[index].isOn
+        
+        Task {
+            let power = newState ? "ON" : "OFF"
+            do {
+                _ = try await SmartRoomAPIService.shared.updateAirCondition(acId, power: power)
+            } catch {
+                print("⚠️ Failed to toggle AC: \(error.localizedDescription)")
+            }
+            
+            // Remove from toggling set
+            await MainActor.run {
+                uiState.togglingACIds.remove(acId)
+            }
+        }
+    }
+    
 
 }
 
@@ -168,6 +219,12 @@ struct RoomDetailScreen: View {
             }
         }
         .navigationBarHidden(true)
+        .onAppear {
+            // Reload ACs when returning from ACDetailScreen
+            if !viewModel.uiState.isLoading {
+                viewModel.reloadACs()
+            }
+        }
     }
     
     private var mainContent: some View {
@@ -279,7 +336,7 @@ struct RoomDetailScreen: View {
                 .fontWeight(.bold)
                 .foregroundColor(AppColors.textPrimary)
             
-            if viewModel.uiState.isLoadingLights {
+            if viewModel.uiState.isLoadingLights || viewModel.uiState.isLoadingACs {
                 HStack {
                     Spacer()
                     VStack(spacing: 12) {
@@ -292,16 +349,26 @@ struct RoomDetailScreen: View {
                     Spacer()
                 }
                 .padding(.vertical, 24)
-            } else if viewModel.uiState.lights.isEmpty {
+            } else if viewModel.uiState.lights.isEmpty && viewModel.uiState.airConditioners.isEmpty {
                 Text("No devices found")
                     .foregroundColor(AppColors.textSecondary)
             } else {
+                // Lights
                 ForEach(viewModel.uiState.lights) { light in
                     DeviceControlCard(
                         light: light,
                         onToggle: { viewModel.toggleLight(light.id) },
                         onLevelChange: { viewModel.setLightLevel(light.id, $0) },
                         isToggling: viewModel.uiState.togglingLightIds.contains(light.id)
+                    )
+                }
+                
+                // Air Conditioners
+                ForEach(viewModel.uiState.airConditioners) { ac in
+                    ACDeviceCard(
+                        device: ac,
+                        onToggle: { viewModel.toggleAC(ac.id) },
+                        isToggling: viewModel.uiState.togglingACIds.contains(ac.id)
                     )
                 }
             }
@@ -388,51 +455,57 @@ struct RoomDetailScreen: View {
         let isToggling: Bool
         
         var body: some View {
-            VStack(alignment: .leading, spacing: 12) {
-                // Header
-                HStack {
-                    Image(systemName: "lightbulb.fill")
-                        .font(.title2)
-                        .foregroundColor(light.isActive ? AppColors.primaryPurple : AppColors.textSecondary)
+            HStack(spacing: 15) {
+                // Icon + Info
+                HStack(spacing: 15) {
+                    ZStack {
+                        Circle()
+                            .fill(AppColors.surfaceWhite)
+                            .frame(width: 50, height: 50)
+                            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+                        
+                        Image(systemName: "lightbulb.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(light.isActive ? Color(red: 1.0, green: 0.8, blue: 0.0) : AppColors.textSecondary)
+                    }
                     
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(light.name)
                             .font(AppTypography.titleMedium)
                             .foregroundColor(AppColors.textPrimary)
                         
-                        Text(light.isActive ? "\(light.level)%" : "Off")
-                            .font(AppTypography.bodyMedium)
-                            .foregroundColor(AppColors.textSecondary)
+                        HStack(spacing: 6) {
+                            Text("\(light.level)%")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(AppColors.primaryPurple)
+                            
+                            Text("•")
+                                .foregroundColor(AppColors.textSecondary)
+                            
+                            Text(light.isActive ? "ON" : "OFF")
+                                .font(.system(size: 13))
+                                .foregroundColor(light.isActive ? Color.green : AppColors.textSecondary)
+                        }
                     }
-                    
-                    Spacer()
-                    
-                    Toggle("", isOn: Binding(
-                        get: { light.isActive },
-                        set: { _ in onToggle() }
-                    ))
-                    .toggleStyle(SwitchToggleStyle(tint: AppColors.primaryPurple))
-                    .disabled(isToggling)
                 }
                 
-                // Slider (only show when device is on)
-                if light.isActive {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Brightness")
-                            .font(AppTypography.bodyMedium)
-                            .foregroundColor(AppColors.textSecondary)
-                        
-                        Slider(
-                            value: Binding(
-                                get: { Double(light.level) },
-                                set: { onLevelChange(Int($0)) }
-                            ),
-                            in: 1...100,
-                            step: 1
-                        )
-                        .accentColor(AppColors.primaryPurple)
+                Spacer()
+                
+                // Toggle Switch
+                ZStack {
+                    if isToggling {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    } else {
+                        Toggle("", isOn: Binding(
+                            get: { light.isActive },
+                            set: { _ in onToggle() }
+                        ))
+                        .toggleStyle(SwitchToggleStyle(tint: Color(red: 1.0, green: 0.8, blue: 0.0)))
+                        .disabled(isToggling)
                     }
                 }
+                .frame(width: 51, height: 31)
             }
             .padding(16)
             .background(
@@ -440,6 +513,86 @@ struct RoomDetailScreen: View {
                     .fill(AppColors.surfaceWhite)
                     .shadow(color: AppColors.textSecondary.opacity(0.1), radius: 6, x: 0, y: 3)
             )
+        }
+    }
+    
+    // MARK: - AC Device Card
+    struct ACDeviceCard: View {
+        let device: ACDevice
+        let onToggle: () -> Void
+        let isToggling: Bool
+        @State private var navigateToDetail: Bool = false
+        
+        var body: some View {
+            ZStack {
+                NavigationLink(destination: ACDetailScreen(device: device), isActive: $navigateToDetail) {
+                    EmptyView()
+                }
+                .hidden()
+                
+                HStack(spacing: 15) {
+                    // Icon + Info
+                    HStack(spacing: 15) {
+                        ZStack {
+                            Circle()
+                                .fill(AppColors.surfaceWhite)
+                                .frame(width: 50, height: 50)
+                                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+                            
+                            Image(systemName: "snowflake")
+                                .font(.system(size: 22))
+                                .foregroundColor(Color(red: 0.23, green: 0.51, blue: 0.96))
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(device.name)
+                                .font(AppTypography.titleMedium)
+                                .foregroundColor(AppColors.textPrimary)
+                            
+                            HStack(spacing: 6) {
+                                Text("\(device.temperature)°C")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(AppColors.primaryPurple)
+                                
+                                Text("•")
+                                    .foregroundColor(AppColors.textSecondary)
+                                
+                                Text(device.mode)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(AppColors.textSecondary)
+                            }
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // Toggle Switch
+                    ZStack {
+                        if isToggling {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else {
+                            Toggle("", isOn: Binding(
+                                get: { device.isOn },
+                                set: { _ in onToggle() }
+                            ))
+                            .toggleStyle(SwitchToggleStyle(tint: Color(red: 0.0, green: 0.48, blue: 1.0)))
+                            .disabled(isToggling)
+                        }
+                    }
+                    .frame(width: 51, height: 31)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(AppColors.surfaceWhite)
+                        .shadow(color: AppColors.textSecondary.opacity(0.1), radius: 6, x: 0, y: 3)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    navigateToDetail = true
+                }
+            }
         }
     }
     

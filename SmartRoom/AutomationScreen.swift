@@ -398,12 +398,22 @@ class AutomationViewModel: ObservableObject {
             // 2️⃣ Với mỗi automation → lấy actions (equipments)
             var loadedJobs: [AutomationJob] = []
             
+            // 2.5️⃣ Load all lights once để map tên equipment
+            let allLights = try await SmartRoomAPIService.shared.getAllLights(page: 0, size: 1000)
+            
             for automation in automations {
                 do {
                     let actionsRes = try await SmartRoomAPIService.shared.getAutomationActions(automationId: automation.id)
                     
-                    // Lấy danh sách tên equipment từ actions
-                    let equipmentNames = actionsRes.map { $0.targetName }
+                    // Map từ targetId sang tên thực tế của equipment
+                    let equipmentNames = actionsRes.compactMap { action -> String? in
+                        if action.targetType == "LIGHT" {
+                            // Tìm light theo ID và lấy tên
+                            return allLights.first(where: { $0.id == action.targetId })?.name
+                        }
+                        // Các loại equipment khác có thể thêm ở đây
+                        return action.targetName // Fallback to targetName if not found
+                    }
                     
                     let job = AutomationJob(from: automation, equipments: equipmentNames)
                     loadedJobs.append(job)
