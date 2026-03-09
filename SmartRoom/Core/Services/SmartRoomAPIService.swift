@@ -37,6 +37,11 @@ struct Room: Codable, Identifiable {
     let name: String
     let floorId: Int
     let description: String?
+    var deviceCount: Int = 0
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, floorId, description
+    }
 }
 
 struct Light: Codable, Identifiable {
@@ -60,6 +65,47 @@ struct AirCondition: Codable, Identifiable {
     let mode: String
     let fanSpeed: Int
     let swing: String
+}
+
+struct FanDevice: Codable, Identifiable {
+    let id: Int
+    let naturalId: String
+    let name: String
+    let description: String?
+    let isActive: Bool
+    let roomId: Int
+    let power: String
+    let type: String
+    let speed: Int?
+    let mode: String?
+    let swing: String?
+    let light: String?
+}
+
+struct FanControlRequest: Codable {
+    let power: String?
+    let mode: String?
+    let speed: Int?
+    let swing: String?
+    let light: String?
+    
+    init(power: String? = nil, mode: String? = nil, speed: Int? = nil, swing: String? = nil, light: String? = nil) {
+        self.power = power
+        self.mode = mode
+        self.speed = speed
+        self.swing = swing
+        self.light = light
+    }
+}
+
+struct Device: Codable, Identifiable {
+    let id: Int
+    let naturalId: String
+    let name: String
+    let description: String?
+    let isActive: Bool
+    let roomId: Int
+    let category: String // "LIGHT", "AC", "FAN", etc.
 }
 
 // MARK: - Auth Models
@@ -108,15 +154,30 @@ struct LightToggleResponse: Codable {
 final class SmartRoomAPIService {
 
     static let shared = SmartRoomAPIService()
-    private init() {}
+    private init() {
+        print("\n===== SmartRoomAPIService INIT =====")
+        // Load API URL from TokenManager if available
+        if let savedURL = TokenManager.shared.getAPIURL() {
+            self.baseURL = savedURL
+            print("Loaded saved API URL: \(savedURL)")
+        } else {
+            print("No saved API URL, using default: \(baseURL)")
+        }
+        print("=========================================\n")
+    }
 
-    private var baseURL: String = "http://192.168.2.29:8080/api/v1"
+    private var baseURL: String = "http://192.168.2.29:8080/api/v1" // Default fallback
 
     var onTokenExpired: (() -> Void)?
 
     func setBaseURL(_ url: String) {
         self.baseURL = url
-        print("🌐 Base URL set to: \(url)")
+        TokenManager.shared.saveAPIURL(url) // Save to TokenManager
+        print("Base URL updated to: \(url)")
+    }
+    
+    func getBaseURL() -> String {
+        return baseURL
     }
 
     private func makeURL(_ path: String) -> URL {
@@ -170,6 +231,7 @@ final class SmartRoomAPIService {
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(LoginRequest(username: username, password: password))
+        request.timeoutInterval = 15 // 15 seconds timeout
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -203,6 +265,13 @@ final class SmartRoomAPIService {
         let data = try await makeAuthenticatedRequest(url: url)
         let response = try JSONDecoder().decode(APIResponse<PaginatedData<Room>>.self, from: data)
         return response.data.content
+    }
+    
+    func getDevicesByRoom(_ roomId: Int) async throws -> [Device] {
+        let url = makeURL("/rooms/\(roomId)/devices")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[Device]>.self, from: data)
+        return response.data
     }
 
     // MARK: - Lights
@@ -472,6 +541,27 @@ final class SmartRoomAPIService {
         return apiResponse.data
     }
     
+    // MARK: - Fans
+    func getFansByRoom(_ roomId: Int) async throws -> [FanDevice] {
+        let url = makeURL("/rooms/\(roomId)/fans/all")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[FanDevice]>.self, from: data)
+        return response.data
+    }
+    
+    func getFanById(_ fanId: Int) async throws -> FanDevice {
+        let url = makeURL("/fans/\(fanId)")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<FanDevice>.self, from: data)
+        return response.data
+    }
+    
+    func controlFan(_ naturalId: String, request: FanControlRequest) async throws {
+        let url = makeURL("/fans/\(naturalId)/control")
+        let requestBody = try JSONEncoder().encode(request)
+        _ = try await makeAuthenticatedRequest(url: url, method: "PUT", body: requestBody)
+    }
+    
     // MARK: - Temperature Sensors
     func getTemperatureSensorsByRoom(_ roomId: Int, page: Int = 0, size: Int = 50) async throws -> [TemperatureSensor] {
         let url = makeURL("/rooms/\(roomId)/temperatures?page=\(page)&size=\(size)")
@@ -710,6 +800,35 @@ final class SmartRoomAPIService {
         let url = makeURL("/automations/\(automationId)")
         _ = try await makeAuthenticatedRequest(url: url, method: "DELETE")
     }
+
+    // MARK: - Rules APIs
+    func getAllRules() async throws -> [APIRule] {
+        let url = makeURL("/rules/all")
+        let data = try await makeAuthenticatedRequest(url: url)
+        let response = try JSONDecoder().decode(APIResponse<[APIRule]>.self, from: data)
+        return response.data
+    }
+    
+    func createRule(_ request: CreateRuleRequest) async throws -> APIRule {
+        let url = makeURL("/rules")
+        let body = try JSONEncoder().encode(request)
+        let data = try await makeAuthenticatedRequest(url: url, method: "POST", body: body)
+        let response = try JSONDecoder().decode(APIResponse<APIRule>.self, from: data)
+        return response.data
+    }
+    
+    func updateRule(id: Int, _ request: UpdateRuleRequest) async throws -> APIRule {
+        let url = makeURL("/rules/\(id)")
+        let body = try JSONEncoder().encode(request)
+        let data = try await makeAuthenticatedRequest(url: url, method: "PUT", body: body)
+        let response = try JSONDecoder().decode(APIResponse<APIRule>.self, from: data)
+        return response.data
+    }
+    
+    func deleteRule(id: Int) async throws {
+        let url = makeURL("/rules/\(id)")
+        _ = try await makeAuthenticatedRequest(url: url, method: "DELETE")
+    }
 }
 
 // MARK: - Temperature History Model
@@ -855,4 +974,176 @@ struct CreateActionRequest: Codable {
     let actionType: String
     let parameterValue: String?
     let executionOrder: Int?
+}
+
+// MARK: - Rules Models
+enum RuleJSONValue: Codable, Equatable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case object([String: RuleJSONValue])
+    case array([RuleJSONValue])
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(Int.self) {
+            self = .int(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .double(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode([String: RuleJSONValue].self) {
+            self = .object(value)
+        } else if let value = try? container.decode([RuleJSONValue].self) {
+            self = .array(value)
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported JSON value")
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .int(let value):
+            try container.encode(value)
+        case .double(let value):
+            try container.encode(value)
+        case .bool(let value):
+            try container.encode(value)
+        case .object(let value):
+            try container.encode(value)
+        case .array(let value):
+            try container.encode(value)
+        case .null:
+            try container.encodeNil()
+        }
+    }
+
+    var stringValue: String? {
+        switch self {
+        case .string(let value):
+            return value
+        case .int(let value):
+            return String(value)
+        case .double(let value):
+            return String(value)
+        case .bool(let value):
+            return value ? "true" : "false"
+        default:
+            return nil
+        }
+    }
+
+    var intValue: Int? {
+        switch self {
+        case .int(let value):
+            return value
+        case .double(let value):
+            return Int(value)
+        case .string(let value):
+            return Int(value)
+        case .bool(let value):
+            return value ? 1 : 0
+        default:
+            return nil
+        }
+    }
+
+    var boolValue: Bool? {
+        switch self {
+        case .bool(let value):
+            return value
+        case .int(let value):
+            return value != 0
+        case .double(let value):
+            return value != 0
+        case .string(let value):
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if ["true", "on", "1", "yes"].contains(normalized) {
+                return true
+            }
+            if ["false", "off", "0", "no"].contains(normalized) {
+                return false
+            }
+            return nil
+        default:
+            return nil
+        }
+    }
+}
+
+struct APIRuleCondition: Codable, Identifiable {
+    let id: Int
+    let sortOrder: Int?
+    let dataSource: String
+    let resourceParam: [String: RuleJSONValue]?
+    let `operator`: String
+    let value: RuleJSONValue
+    let nextLogic: String?
+    let createdAt: String?
+    let updatedAt: String?
+}
+
+struct APIRule: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let priority: Int
+    let isActive: Bool
+    let roomId: Int
+    let targetDeviceId: Int
+    let targetDeviceCategory: String
+    let actionParams: [String: RuleJSONValue]?
+    let conditions: [APIRuleCondition]?
+    let createdAt: String?
+    let updatedAt: String?
+}
+
+// MARK: - Create/Update Rule Request Models
+struct CreateRuleRequest: Codable {
+    let name: String
+    let priority: Int
+    let roomId: Int
+    let targetDeviceId: Int
+    let targetDeviceCategory: String
+    let actionParams: [String: RuleJSONValue]
+    let isActive: Bool?
+    let conditions: [CreateRuleConditionRequest]
+}
+
+struct CreateRuleConditionRequest: Codable {
+    let sortOrder: Int
+    let dataSource: String
+    let resourceParam: [String: RuleJSONValue]
+    let `operator`: String
+    let value: String
+    let nextLogic: String?
+}
+
+struct UpdateRuleRequest: Codable {
+    let name: String
+    let priority: Int
+    let targetDeviceId: Int
+    let targetDeviceCategory: String
+    let actionParams: [String: RuleJSONValue]
+    let isActive: Bool?
+    let conditions: [UpdateRuleConditionRequest]
+}
+
+struct UpdateRuleConditionRequest: Codable {
+    let id: Int?
+    let sortOrder: Int
+    let dataSource: String
+    let resourceParam: [String: RuleJSONValue]
+    let `operator`: String
+    let value: String
+    let nextLogic: String?
 }

@@ -3,291 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AC Detail Control</title>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Smart Device Flow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root {
-            --primary-blue: #007aff;
-            --bg-light-blue: #eef4ff;
-            --text-dark: #333333;
-            --text-gray: #8e8e93;
-            --bg-main: #f8f9ff;
-        }
-
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-main);
-            display: flex;
-            justify-content: center;
-        }
-
-        .app-container {
-            width: 100%;
-            max-width: 400px;
-            background: var(--bg-main);
-            min-height: 100vh;
-            padding: 20px;
-            position: relative;
-        }
-
-        /* Header */
-        header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 40px;
-        }
-        header h1 {
-            flex: 1;
-            text-align: center;
-            font-size: 18px;
-            margin-right: 24px; /* offset cho icon back */
-        }
-
-        /* Temperature Circle Section */
-        .temp-control-section {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 40px;
-        }
-
-        .side-btn {
-            background: var(--bg-light-blue);
-            border-radius: 40px;
-            padding: 20px 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 30px;
-            align-items: center;
-        }
-        
-        .swing-btn {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 5px;
-            color: var(--text-gray);
-            font-size: 12px;
-        }
-        .swing-icon-wrapper {
-            background: #f0f0f0;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .circle-display {
-            position: relative;
-            width: 200px;
-            height: 200px;
-        }
-
-        .temp-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-        }
-        .temp-text h2 {
-            font-size: 48px;
-            margin: 0;
-            color: var(--text-dark);
-        }
-        .temp-text span {
-            color: var(--primary-blue);
-            font-weight: 700;
-            letter-spacing: 1px;
-        }
-
-        /* Turn Off Button */
-        .btn-turn-off {
-            background: var(--primary-blue);
-            color: white;
-            width: 100%;
-            border: none;
-            padding: 18px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 40px;
-            box-shadow: 0 4px 15px rgba(0, 122, 255, 0.3);
-        }
-
-        /* Mode Section */
-        .section-label {
-            color: var(--text-gray);
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 15px;
-            display: block;
-        }
-
-        .mode-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
-            margin-bottom: 40px;
-        }
-        .mode-item {
-            background: white;
-            border: 1px solid #e5e5ea;
-            padding: 10px 0;
-            text-align: center;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-dark);
-        }
-        .mode-item.active {
-            background: var(--bg-light-blue);
-            border-color: var(--primary-blue);
-            color: var(--primary-blue);
-        }
-
-        /* Fan Speed Section */
-        .fan-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .fan-level {
-            color: var(--primary-blue);
-            font-size: 13px;
-            font-weight: 700;
-        }
-
-        .slider-container {
-            position: relative;
-            padding: 20px 0;
-        }
-        .slider-track {
-            height: 4px;
-            background: #e5e5ea;
-            border-radius: 2px;
-            position: relative;
-        }
-        .slider-progress {
-            width: 50%;
-            height: 100%;
-            background: var(--primary-blue);
-            position: absolute;
-        }
-        .slider-thumb {
-            width: 20px;
-            height: 20px;
-            background: var(--primary-blue);
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            border: 3px solid white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        .slider-labels {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 15px;
-            color: var(--text-gray);
-            font-size: 12px;
-        }
+        body { background-color: #f8f9ff; font-family: 'Inter', sans-serif; }
+        .step-content { display: none; }
+        .step-content.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        .item-card { transition: all 0.2s; border: 1px solid #f1f1f1; }
+        .item-card:active { transform: scale(0.98); }
+        .selected-badge { background-color: #ecfdf5; border: 1px dashed #10b981; color: #059669; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
-<body>
+<body class="max-w-md mx-auto min-h-screen pb-28">
 
-<div class="app-container">
-    <header>
-        <i data-lucide="arrow-left"></i>
-        <h1>Điều hòa phòng server</h1>
+    <header class="flex items-center p-6 bg-white sticky top-0 z-10 shadow-sm mb-4">
+        <button onclick="prevStep()" class="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-500 mr-2">
+            <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <h1 class="text-lg font-bold text-gray-800" id="header-title">Chọn Tầng</h1>
     </header>
 
-    <div class="temp-control-section">
-        <div class="side-btn">
-            <i data-lucide="plus" style="color: var(--primary-blue)"></i>
-            <div style="width: 20px; height: 2px; background: white;"></div>
-            <i data-lucide="minus" style="color: var(--primary-blue)"></i>
+    <div class="px-6">
+        <div class="flex justify-between mb-8 px-2">
+            <div id="prog-1" class="w-1/4 h-1.5 rounded-full bg-purple-600 transition-all"></div>
+            <div id="prog-2" class="w-1/4 h-1.5 rounded-full bg-gray-200 transition-all mx-1"></div>
+            <div id="prog-3" class="w-1/4 h-1.5 rounded-full bg-gray-200 transition-all mx-1"></div>
+            <div id="prog-4" class="w-1/4 h-1.5 rounded-full bg-gray-200 transition-all"></div>
         </div>
 
-        <div class="circle-display">
-            <svg width="200" height="200" viewBox="0 0 200 200">
-                <!-- Background arc -->
-                <path 
-                    d="M 40 160 A 80 80 0 1 1 160 160" 
-                    fill="none" 
-                    stroke="#e5e5ea" 
-                    stroke-width="12" 
-                    stroke-linecap="round"
-                />
-                <!-- Progress arc (represents temperature) -->
-                <path 
-                    d="M 40 160 A 80 80 0 0 1 130 46" 
-                    fill="none" 
-                    stroke="#007aff" 
-                    stroke-width="14" 
-                    stroke-linecap="round"
-                />
-                <!-- Thumb circle at end of progress -->
-                <circle cx="130" cy="46" r="8" fill="white" stroke="#007aff" stroke-width="3"/>
-            </svg>
-            <div class="temp-text">
-                <h2>25°</h2>
-                <span>COOL</span>
+        <div id="step-1" class="step-content active">
+            <div class="space-y-3">
+                <button onclick="nextStep(2, 'Tầng Trệt')" class="item-card w-full p-5 bg-white rounded-2xl flex justify-between items-center shadow-sm">
+                    <span class="font-bold text-gray-700">Tầng Trệt</span>
+                    <i class="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                </button>
+                <button onclick="nextStep(2, 'Tầng 1')" class="item-card w-full p-5 bg-white rounded-2xl flex justify-between items-center shadow-sm">
+                    <span class="font-bold text-gray-700">Tầng 1</span>
+                    <i class="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                </button>
             </div>
         </div>
 
-        <div class="swing-btn">
-            <div class="swing-icon-wrapper">
-                <i data-lucide="wind"></i>
+        <div id="step-2" class="step-content">
+            <div class="selected-badge p-4 rounded-xl mb-6 flex justify-between items-center">
+                <span class="text-sm font-bold">Tầng: <span id="val-floor"></span></span>
+                <i class="fa-solid fa-check-circle"></i>
             </div>
-            <span>Swing</span>
+            <div class="space-y-3">
+                <button onclick="nextStep(3, 'Phòng Khách')" class="item-card w-full p-5 bg-white rounded-2xl flex justify-between items-center shadow-sm">
+                    <span class="font-bold text-gray-700">Phòng Khách</span>
+                    <i class="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                </button>
+                <button onclick="nextStep(3, 'Phòng Server')" class="item-card w-full p-5 bg-white rounded-2xl flex justify-between items-center shadow-sm">
+                    <span class="font-bold text-gray-700">Phòng Máy Chủ Trung Tâm</span>
+                    <i class="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="step-3" class="step-content">
+            <div class="selected-badge p-4 rounded-xl mb-6 flex justify-between items-center">
+                <span class="text-sm font-bold">Phòng: <span id="val-room"></span></span>
+                <i class="fa-solid fa-check-circle"></i>
+            </div>
+            <div class="space-y-3">
+                <button onclick="nextStep(4, 'Đèn trần')" class="item-card w-full p-5 bg-white rounded-2xl flex items-center shadow-sm">
+                    <div class="w-10 h-10 bg-yellow-50 text-yellow-500 rounded-lg flex items-center justify-center mr-4">
+                        <i class="fa-solid fa-lightbulb"></i>
+                    </div>
+                    <div class="text-left">
+                        <p class="font-bold text-gray-700">Đèn trần chính</p>
+                        <p class="text-[10px] text-gray-400 uppercase tracking-tighter">Device ID: 01</p>
+                    </div>
+                </button>
+                <button onclick="nextStep(4, 'Máy lạnh')" class="item-card w-full p-5 bg-white rounded-2xl flex items-center shadow-sm">
+                    <div class="w-10 h-10 bg-blue-50 text-blue-500 rounded-lg flex items-center justify-center mr-4">
+                        <i class="fa-solid fa-snowflake"></i>
+                    </div>
+                    <div class="text-left">
+                        <p class="font-bold text-gray-700">Điều hòa Server</p>
+                        <p class="text-[10px] text-gray-400 uppercase tracking-tighter">Device ID: 05</p>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <div id="step-4" class="step-content">
+            <div class="selected-badge p-4 rounded-xl mb-6 flex justify-between items-center">
+                <span class="text-sm font-bold">Thiết bị: <span id="val-device"></span></span>
+                <i class="fa-solid fa-check-circle"></i>
+            </div>
+            
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-6">
+                <div>
+                    <p class="text-sm font-bold text-gray-800 mb-3">Trạng thái:</p>
+                    <div class="flex gap-3">
+                        <button onclick="toggleAction(this)" class="btn-act flex-1 py-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-600 font-bold transition-all">BẬT (ON)</button>
+                        <button onclick="toggleAction(this)" class="btn-act flex-1 py-3 rounded-xl border-2 border-gray-100 bg-white text-gray-400 font-bold transition-all">TẮT (OFF)</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Thứ tự (Order)</label>
+                    <input type="number" value="1" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-purple-400 focus:bg-white transition-all">
+                </div>
+            </div>
         </div>
     </div>
 
-    <button class="btn-turn-off">TURN OFF</button>
-
-    <span class="section-label">Mode</span>
-    <div class="mode-grid">
-        <div class="mode-item active">COOL</div>
-        <div class="mode-item">HEAT</div>
-        <div class="mode-item">DRY</div>
-        <div class="mode-item">FAN</div>
-        <div class="mode-item">AUTO</div>
+    <div id="footer-save" class="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-50 hidden">
+        <button class="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-transform">
+            Hoàn tất cấu hình
+        </button>
     </div>
 
-    <div class="fan-header">
-        <span class="section-label" style="margin: 0;">Fan Speed</span>
-        <span class="fan-level">Level 3</span>
-    </div>
+    <script>
+        let currentStep = 1;
+        const titles = ["Chọn Tầng", "Chọn Phòng", "Chọn Thiết bị", "Cấu hình"];
 
-    <div class="slider-container">
-        <div class="slider-track">
-            <div class="slider-progress"></div>
-            <div class="slider-thumb"></div>
-        </div>
-        <div class="slider-labels">
-            <span>0</span>
-            <span>1</span>
-            <span>2</span>
-            <span>3</span>
-            <span>4</span>
-            <span>5</span>
-        </div>
-    </div>
-</div>
+        function nextStep(step, value) {
+            // Lưu giá trị để hiển thị lại ở bước sau
+            if(currentStep === 1) document.getElementById('val-floor').innerText = value;
+            if(currentStep === 2) document.getElementById('val-room').innerText = value;
+            if(currentStep === 3) document.getElementById('val-device').innerText = value;
 
-<script>
-    // Khởi tạo icon
-    lucide.createIcons();
-</script>
+            // Chuyển UI
+            document.getElementById(`step-${currentStep}`).classList.remove('active');
+            currentStep = step;
+            document.getElementById(`step-${currentStep}`).classList.add('active');
+            
+            // Cập nhật Progress Bar & Title
+            document.getElementById('header-title').innerText = titles[currentStep-1];
+            document.getElementById(`prog-${currentStep}`).classList.replace('bg-gray-200', 'bg-purple-600');
 
+            // Hiển thị nút Save ở bước cuối
+            document.getElementById('footer-save').style.display = (currentStep === 4) ? 'block' : 'none';
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                document.getElementById(`prog-${currentStep}`).classList.replace('bg-purple-600', 'bg-gray-200');
+                document.getElementById(`step-${currentStep}`).classList.remove('active');
+                currentStep--;
+                document.getElementById(`step-${currentStep}`).classList.add('active');
+                document.getElementById('header-title').innerText = titles[currentStep-1];
+                document.getElementById('footer-save').style.display = 'none';
+            }
+        }
+
+        function toggleAction(btn) {
+            document.querySelectorAll('.btn-act').forEach(b => {
+                b.className = 'btn-act flex-1 py-3 rounded-xl border-2 border-gray-100 bg-white text-gray-400 font-bold transition-all';
+            });
+            btn.className = 'btn-act flex-1 py-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-600 font-bold transition-all';
+        }
+    </script>
 </body>
 </html>

@@ -98,7 +98,7 @@ struct ACControlScreen: View {
                 } else if let error = errorMessage {
                     Spacer()
                     VStack(spacing: 16) {
-                        Text("❌ Lỗi")
+                        Text("Lỗi")
                             .font(AppTypography.titleMedium)
                             .foregroundColor(AppColors.accentPink)
                         
@@ -199,17 +199,17 @@ struct ACControlScreen: View {
     
     private func reloadFloorData(at index: Int) {
         guard index >= 0, index < floors.count else { 
-            print("⚠️ Cannot reload invalid floor index: \(index)")
+            print("Cannot reload invalid floor index: \(index)")
             return 
         }
         
         // Prevent multiple simultaneous loads
         guard !isLoadingFloor else {
-            print("⚠️ Already loading floor data, ignoring tap")
+            print("Already loading floor data, ignoring tap")
             return
         }
         
-        print("🔄 Reloading floor \(index): \(floors[index].name)")
+        print("Reloading floor \(index): \(floors[index].name)")
         // Mark as not loaded to force reload, but don't clear rooms yet
         // This prevents "Index out of range" errors while UI is still rendering
         floors[index].isLoaded = false
@@ -219,10 +219,10 @@ struct ACControlScreen: View {
     @MainActor
     private func reloadCurrentFloor() async {
         guard selectedFloorIndex >= 0, selectedFloorIndex < floors.count else { 
-            print("⚠️ Cannot reload current floor, invalid index: \(selectedFloorIndex)")
+            print("Cannot reload current floor, invalid index: \(selectedFloorIndex)")
             return 
         }
-        print("🔄 Pull-to-refresh floor \(selectedFloorIndex): \(floors[selectedFloorIndex].name)")
+        print("Pull-to-refresh floor \(selectedFloorIndex): \(floors[selectedFloorIndex].name)")
         // Mark as not loaded to force reload without clearing (prevents index errors)
         floors[selectedFloorIndex].isLoaded = false
         await performFloorLoad(at: selectedFloorIndex)
@@ -258,13 +258,13 @@ struct ACControlScreen: View {
     @MainActor
     private func performFloorLoad(at index: Int) async {
         guard index >= 0, index < floors.count else { 
-            print("⚠️ Invalid floor index: \(index), floors count: \(floors.count)")
+            print("Invalid floor index: \(index), floors count: \(floors.count)")
             return 
         }
         
         // Prevent concurrent loads
         guard !isLoadingFloor else {
-            print("⚠️ Floor load already in progress, skipping")
+            print("Floor load already in progress, skipping")
             return
         }
         
@@ -292,7 +292,7 @@ struct ACControlScreen: View {
             }
             
         } catch {
-            print("❌ Error loading floor \(index): \(error.localizedDescription)")
+            print("Error loading floor \(index): \(error.localizedDescription)")
             // Could add per-floor error handling here if needed
         }
         
@@ -529,7 +529,7 @@ struct ACDeviceRow: View {
             do {
                 _ = try await SmartRoomAPIService.shared.updateAirCondition(device.id, power: power)
             } catch {
-                print("⚠️ Failed to send toggle to server: \(error.localizedDescription)")
+                print("Failed to send toggle to server: \(error.localizedDescription)")
             }
             
             await MainActor.run {

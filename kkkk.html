@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Device List Inspector</title>
+    <style>
+        :root { --code-bg: #0f172a; --code-text: #38bdf8; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f1f5f9; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 750px; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 1.25rem; }
+        
+        .config-summary { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0; font-size: 13px; color: #475569; }
+        
+        button { width: 100%; padding: 14px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px; transition: background 0.2s; }
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #94a3b8; cursor: wait; }
+
+        #status-bar { margin-top: 15px; padding: 10px; border-radius: 6px; font-size: 14px; text-align: center; background: #f1f5f9; color: #0369a1; border: 1px solid #bae6fd; }
+        .error { background: #fef2f2 !important; color: #b91c1c !important; border-color: #fecaca !important; }
+
+        .output-header { margin-top: 25px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+        
+        pre { background: var(--code-bg); color: var(--code-text); padding: 20px; border-radius: 10px; font-family: 'Fira Code', 'Courier New', monospace; font-size: 13px; overflow-x: auto; line-height: 1.6; border: 1px solid #1e293b; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📱 Device Inspector (Phòng <span id="room-id-display">--</span>)</h2>
+    
+    <div class="config-summary">
+        <strong>API Endpoint:</strong> <code id="api-path">/api/v1/rooms/{id}/devices</code><br>
+        <strong>Auth Mode:</strong> Bearer Token (Auto-login)
+    </div>
+
+    <button id="btnFetch" onclick="getDevices()">🔍 GET ALL DEVICES</button>
+    
+    <div id="status-bar">Sẵn sàng thực thi...</div>
+
+    <div class="output-header">
+        <span class="label">Response JSON</span>
+        <span style="font-size: 11px; color: #94a3b8;">application/json</span>
+    </div>
+    <pre id="json-output">// Phản hồi từ Server sẽ xuất hiện tại đây...</pre>
+</div>
+
+<script>
+    // ==========================================
+    // CẤU HÌNH HẰNG SỐ CỦA BẠN
+    // ==========================================
+    const CONFIG = {
+        BASE_URL: "http://192.168.2.29:8080/api/v1",
+        USER: "admin",
+        PASS: "smartroom",
+        ROOM_ID: 1 // ID của phòng cần lấy thiết bị
+    };
+
+    // Cập nhật giao diện ban đầu
+    document.getElementById('room-id-display').innerText = CONFIG.ROOM_ID;
+    document.getElementById('api-path').innerText = `${CONFIG.BASE_URL}/rooms/${CONFIG.ROOM_ID}/devices`;
+
+    async function getDevices() {
+        const btn = document.getElementById("btnFetch");
+        const status = document.getElementById("status-bar");
+        const output = document.getElementById("json-output");
+
+        try {
+            btn.disabled = true;
+            status.className = "";
+            status.textContent = "⏳ Bước 1: Đang đăng nhập để lấy Token...";
+            output.textContent = "// Đang tải...";
+
+            // 1. ĐĂNG NHẬP LẤY TOKEN
+            const loginRes = await fetch(`${CONFIG.BASE_URL}/auth/signin`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: CONFIG.USER, password: CONFIG.PASS })
+            });
+
+            if (!loginRes.ok) throw new Error(`Đăng nhập thất bại (${loginRes.status})`);
+            
+            const loginData = await loginRes.json();
+            const token = loginData.accessToken || loginData.token || (loginData.data && loginData.data.token);
+
+            if (!token) throw new Error("Không tìm thấy Token trong Body phản hồi.");
+
+            status.textContent = "✅ Đăng nhập thành công. Đang tải thiết bị...";
+
+            // 2. GỌI API LẤY DANH SÁCH THIẾT BỊ
+            const deviceRes = await fetch(`${CONFIG.BASE_URL}/rooms/${CONFIG.ROOM_ID}/devices`, {
+                method: "GET",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Accept": "application/json"
+                }
+            });
+
+            const result = await deviceRes.json();
+
+            // 3. IN KẾT QUẢ JSON RA MÀN HÌNH
+            status.textContent = `✨ Thành công! Tìm thấy ${result.data ? result.data.length : 0} thiết bị.`;
+            output.textContent = JSON.stringify(result, null, 4);
+
+        } catch (err) {
+            status.className = "error";
+            status.textContent = "❌ LỖI: " + err.message;
+            output.textContent = `// Lỗi hệ thống:\n${err.message}`;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>

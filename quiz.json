@@ -1,0 +1,59 @@
+[
+  {
+    "id": "c_case_01",
+    "content": {
+      "text": "Kết quả xuất ra của đoạn code sau là gì?",
+      "code": "#include <stdio.h>\nvoid main() {\n    int a = 10, b = 20;\n    printf(\"%d\", a > b ? a : b);\n}",
+      "has_code": true
+    },
+    "options": {
+      "is_code": false,
+      "data": {
+        "1": "10",
+        "2": "20",
+        "3": "30",
+        "4": "Lỗi cú pháp"
+      }
+    },
+    "answer": "2",
+    "explanation": "Đây là toán tử tam nguyên. Vì 10 > 20 là sai nên biểu thức trả về giá trị của b là 20."
+  },
+  {
+    "id": "c_case_02",
+    "content": {
+      "text": "Đâu là cách khai báo một con trỏ đúng trong ngôn ngữ C?",
+      "code": "",
+      "has_code": false
+    },
+    "options": {
+      "is_code": true,
+      "data": {
+        "1": "int p*;",
+        "2": "int &p;",
+        "3": "int *p;",
+        "4": "pointer int p;"
+      }
+    },
+    "answer": "3",
+    "explanation": "Trong C, cú pháp khai báo con trỏ là: Kiểu_Dữ_Liệu *Tên_Biến."
+  },
+  {
+    "id": "c_case_03",
+    "content": {
+      "text": "Đoạn mã nào dưới đây dùng để cấp phát động cho một mảng số nguyên gồm 5 phần tử?",
+      "code": "",
+      "has_code": false
+    },
+    "options": {
+      "is_code": true,
+      "data": {
+        "1": "int *arr = malloc(5);",
+        "2": "int *arr = (int*)malloc(5 * sizeof(int));",
+        "3": "int arr = malloc(5 * sizeof(int));",
+        "4": "int *arr = alloc(5 * sizeof(int));"
+      }
+    },
+    "answer": "2",
+    "explanation": "Hàm malloc trả về con trỏ void nên cần ép kiểu (int*) và kích thước phải là số phần tử nhân với sizeof(int)."
+  }
+]

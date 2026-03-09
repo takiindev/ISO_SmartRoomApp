@@ -334,7 +334,7 @@ struct ACDetailScreen: View {
             do {
                 _ = try await SmartRoomAPIService.shared.updateTemperature(device.id, temperature: newValue)
             } catch {
-                print("⚠️ Failed to update temperature: \(error.localizedDescription)")
+                print("Failed to update temperature: \(error.localizedDescription)")
             }
             
             await MainActor.run {
@@ -351,7 +351,7 @@ struct ACDetailScreen: View {
             do {
                 _ = try await SmartRoomAPIService.shared.updateMode(device.id, mode: newMode)
             } catch {
-                print("⚠️ Failed to update mode: \(error.localizedDescription)")
+                print("Failed to update mode: \(error.localizedDescription)")
             }
             
             await MainActor.run {
@@ -368,7 +368,7 @@ struct ACDetailScreen: View {
             do {
                 _ = try await SmartRoomAPIService.shared.updateFanSpeed(device.id, speed: newSpeed)
             } catch {
-                print("⚠️ Failed to update fan speed: \(error.localizedDescription)")
+                print("Failed to update fan speed: \(error.localizedDescription)")
             }
             
             await MainActor.run {
@@ -386,7 +386,7 @@ struct ACDetailScreen: View {
             do {
                 _ = try await SmartRoomAPIService.shared.updateSwing(device.id, state: state)
             } catch {
-                print("⚠️ Failed to update swing: \(error.localizedDescription)")
+                print("Failed to update swing: \(error.localizedDescription)")
             }
             
             await MainActor.run {
@@ -420,7 +420,7 @@ struct ACDetailScreen: View {
                     isPowerOn = device.isOn
                     isLoadingDetails = false
                 }
-                print("❌ Failed to load AC details: \(error.localizedDescription)")
+                print("Failed to load AC details: \(error.localizedDescription)")
             }
         }
     }
@@ -437,7 +437,7 @@ struct ACDetailScreen: View {
             do {
                 _ = try await SmartRoomAPIService.shared.updateAirCondition(device.id, power: power)
             } catch {
-                print("⚠️ Failed to toggle power: \(error.localizedDescription)")
+                print("Failed to toggle power: \(error.localizedDescription)")
             }
             
             await MainActor.run {

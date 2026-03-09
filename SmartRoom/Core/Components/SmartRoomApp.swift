@@ -13,9 +13,8 @@ struct SmartRoomApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        // Xóa token khi app mới launch (kill app trước đó)
-        print("🔄 App init - clearing token")
-        TokenManager.shared.clearToken()
+        print("SmartRoomApp initialized")
+        // KHÔNG xóa token ở đây! Token phải được giữ lại để auto-login
     }
 
     var body: some Scene {
@@ -25,7 +24,7 @@ struct SmartRoomApp: App {
         .onChange(of: scenePhase) { newPhase in
             switch newPhase {
             case .active:
-                print("✅ App active - check auth")
+                print("App active - check auth")
                 NotificationCenter.default.post(name: .forceAuthenticationCheck, object: nil)
             default:
                 break

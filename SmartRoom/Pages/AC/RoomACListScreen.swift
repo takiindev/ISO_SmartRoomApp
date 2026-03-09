@@ -235,7 +235,7 @@ struct RoomACCard: View {
             do {
                 _ = try await SmartRoomAPIService.shared.updateAirCondition(device.id, power: power)
             } catch {
-                print("⚠️ Failed to send toggle to server: \(error.localizedDescription)")
+                print("Failed to send toggle to server: \(error.localizedDescription)")
             }
             
             await MainActor.run {
