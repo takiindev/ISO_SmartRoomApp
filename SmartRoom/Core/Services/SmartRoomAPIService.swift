@@ -49,8 +49,22 @@ struct Light: Codable, Identifiable {
     let name: String
     let roomId: Int
     var isActive: Bool
-    var level: Int
+    var level: Int?
     let description: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, roomId, isActive, level, description
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        roomId = try container.decode(Int.self, forKey: .roomId)
+        isActive = try container.decode(Bool.self, forKey: .isActive)
+        level = try container.decodeIfPresent(Int.self, forKey: .level) ?? 0
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+    }
 }
 
 struct AirCondition: Codable, Identifiable {
@@ -285,6 +299,13 @@ final class SmartRoomAPIService {
     func getLightsByRoom(_ roomId: Int) async throws -> [Light] {
         let url = makeURL("/lights/room/\(roomId)")
         let data = try await makeAuthenticatedRequest(url: url)
+        
+        // Log raw JSON response
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("📦 [RAW JSON] Lights Response:")
+            print(jsonString)
+        }
+        
         let response = try JSONDecoder().decode(APIResponse<PaginatedData<Light>>.self, from: data)
         return response.data.content
     }
@@ -566,6 +587,13 @@ final class SmartRoomAPIService {
     func getTemperatureSensorsByRoom(_ roomId: Int, page: Int = 0, size: Int = 50) async throws -> [TemperatureSensor] {
         let url = makeURL("/rooms/\(roomId)/temperatures?page=\(page)&size=\(size)")
         let data = try await makeAuthenticatedRequest(url: url)
+        
+        // Log raw JSON response for debugging
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("📦 [RAW JSON] Temperature Sensors Response:")
+            print(jsonString)
+        }
+        
         let response = try JSONDecoder().decode(APIResponse<PaginatedData<TemperatureSensor>>.self, from: data)
         return response.data.content
     }
@@ -829,6 +857,18 @@ final class SmartRoomAPIService {
         let url = makeURL("/rules/\(id)")
         _ = try await makeAuthenticatedRequest(url: url, method: "DELETE")
     }
+}
+
+// MARK: - Temperature Sensor Model
+struct TemperatureSensor: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let description: String?
+    let isActive: Bool
+    let currentValue: Double?
+    let naturalId: String
+    let roomId: Int
+    let deviceControlId: Int
 }
 
 // MARK: - Temperature History Model

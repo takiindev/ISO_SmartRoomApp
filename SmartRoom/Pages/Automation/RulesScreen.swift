@@ -597,7 +597,7 @@ class RulesViewModel: ObservableObject {
                     name: light.name,
                     currentInfoRows: [
                         RuleDeviceInfo(label: "Current Power", value: onOff(light.isActive)),
-                        RuleDeviceInfo(label: "Current Level", value: "\(light.level)%")
+                        RuleDeviceInfo(label: "Current Level", value: "\(light.level ?? 0)%")
                     ]
                 )
 

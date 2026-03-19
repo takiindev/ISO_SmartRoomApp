@@ -6,11 +6,13 @@ struct RoomDetailUiState {
     var isLoadingLights: Bool = true
     var isLoadingACs: Bool = true
     var isLoadingFans: Bool = true
+    var isLoadingTemperatures: Bool = true
     var roomName: String = ""
     var currentTemp: Double = 0.0
     var lights: [Light] = []
     var airConditioners: [ACDevice] = []
     var fans: [FanDevice] = []
+    var temperatureSensors: [TemperatureSensor] = []
     var errorMessage: String? = nil
     var togglingLightIds: Set<Int> = [] // Track which lights are being toggled
     var togglingACIds: Set<Int> = [] // Track which ACs are being toggled
@@ -43,6 +45,11 @@ class RoomDetailViewModel: ObservableObject {
     }
     
     private func loadRoomData() async {
+        print("\n========== ROOM DETAIL: LOADING DATA ==========")
+        print("Room ID: \(roomId)")
+        print("Room Name: \(roomName)")
+        print("============================================\n")
+        
         do {
             // Set room name from constructor
             uiState.roomName = roomName
@@ -54,28 +61,111 @@ class RoomDetailViewModel: ObservableObject {
             uiState.isLoadingLights = true
             uiState.isLoadingACs = true
             uiState.isLoadingFans = true
+            uiState.isLoadingTemperatures = true
             
-            // Try to get lights from API
+            // ===== API 1: GET LIGHTS =====
+            print("📡 [API 1] Calling: GET /lights/room/\(roomId)")
+            let lightsStartTime = Date()
             let lights = try await SmartRoomAPIService.shared.getLightsByRoom(roomId)
+            let lightsEndTime = Date()
+            let lightsTime = lightsEndTime.timeIntervalSince(lightsStartTime)
+            
+            print("✅ [API 1] Lights Response:")
+            print("   - Count: \(lights.count)")
+            print("   - Time: \(String(format: "%.2f", lightsTime))s")
+            if !lights.isEmpty {
+                print("   - Sample: \(lights.first!)")
+            }
+            
             uiState.lights = lights
             uiState.isLoadingLights = false
             
-            // Try to get air conditioners from API
+            // ===== API 2: GET AIR CONDITIONS =====
+            print("\n📡 [API 2] Calling: GET /air-conditions/room/\(roomId)?page=0&size=50")
+            let acsStartTime = Date()
             let acs = try await SmartRoomAPIService.shared.getAirConditionsByRoom(roomId)
+            let acsEndTime = Date()
+            let acsTime = acsEndTime.timeIntervalSince(acsStartTime)
+            
+            print("✅ [API 2] Air Conditions Response:")
+            print("   - Count: \(acs.count)")
+            print("   - Time: \(String(format: "%.2f", acsTime))s")
+            if !acs.isEmpty {
+                print("   - Sample: \(acs.first!)")
+            }
+            
             uiState.airConditioners = acs.map { ACDevice(from: $0) }
             uiState.isLoadingACs = false
             
-            // Try to get fans from API
+            // ===== API 3: GET FANS =====
+            print("\n📡 [API 3] Calling: GET /rooms/\(roomId)/fans/all")
+            let fansStartTime = Date()
             let fans = try await SmartRoomAPIService.shared.getFansByRoom(roomId)
+            let fansEndTime = Date()
+            let fansTime = fansEndTime.timeIntervalSince(fansStartTime)
+            
+            print("✅ [API 3] Fans Response:")
+            print("   - Count: \(fans.count)")
+            print("   - Time: \(String(format: "%.2f", fansTime))s")
+            if !fans.isEmpty {
+                print("   - Sample: \(fans.first!)")
+            }
+            
             uiState.fans = fans
             uiState.isLoadingFans = false
             
+            // ===== API 4: GET TEMPERATURE SENSORS =====
+            print("\n📡 [API 4] Calling: GET /rooms/\(roomId)/temperatures?page=0&size=50")
+            let tempsStartTime = Date()
+            let temperatureSensors = try await SmartRoomAPIService.shared.getTemperatureSensorsByRoom(roomId)
+            let tempsEndTime = Date()
+            let tempsTime = tempsEndTime.timeIntervalSince(tempsStartTime)
+            
+            print("✅ [API 4] Temperature Sensors Response:")
+            print("   - Count: \(temperatureSensors.count)")
+            print("   - Time: \(String(format: "%.2f", tempsTime))s")
+            if !temperatureSensors.isEmpty {
+                print("   - Sample: \(temperatureSensors.first!)")
+                if let firstTemp = temperatureSensors.first, let currentValue = firstTemp.currentValue {
+                    print("   - First sensor current value: \(currentValue)°C")
+                }
+            }
+            
+            uiState.temperatureSensors = temperatureSensors
+            uiState.isLoadingTemperatures = false
+            
+            print("\n✅ ALL APIs COMPLETED SUCCESSFULLY")
+            print("========================================\n")
+            
         } catch {
+            print("\n❌ ERROR LOADING ROOM DATA")
+            print("Error Type: \(type(of: error))")
+            print("Error: \(error)")
+            print("Localized: \(error.localizedDescription)")
+            
+            if let apiError = error as? SmartRoomAPIError {
+                print("API Error Type: \(apiError)")
+                switch apiError {
+                case .tokenExpired:
+                    print("   → Token expired, user will be logged out")
+                case .networkError(let msg):
+                    print("   → Network Error: \(msg)")
+                case .invalidResponse:
+                    print("   → Invalid response from server")
+                case .unauthorized:
+                    print("   → Unauthorized access")
+                case .serverError(let msg):
+                    print("   → Server Error: \(msg)")
+                }
+            }
+            print("========================================\n")
+            
             // Check if it's a token expiry error - don't show error message as app will logout automatically
             if let apiError = error as? SmartRoomAPIError, apiError == .tokenExpired {
                 uiState.isLoadingLights = false
                 uiState.isLoadingACs = false
                 uiState.isLoadingFans = false
+                uiState.isLoadingTemperatures = false
                 return // Don't set error message, let the logout flow handle it
             }
             
@@ -87,6 +177,7 @@ class RoomDetailViewModel: ObservableObject {
             uiState.isLoadingLights = false
             uiState.isLoadingACs = false
             uiState.isLoadingFans = false
+            uiState.isLoadingTemperatures = false
             uiState.errorMessage = "Không thể tải dữ liệu: \(error.localizedDescription)"
         }
     }
@@ -96,16 +187,22 @@ class RoomDetailViewModel: ObservableObject {
     func toggleLight(_ lightId: Int) {
         guard let index = uiState.lights.firstIndex(where: { $0.id == lightId }) else { return }
         
+        print("\n💡 [TOGGLE LIGHT] Light ID: \(lightId)")
+        
         // Add to toggling set to disable the toggle
         uiState.togglingLightIds.insert(lightId)
         
         Task {
             do {
                 // Call toggle API
+                print("📡 Calling: PUT /lights/\(lightId)/toggle-state")
                 _ = try await SmartRoomAPIService.shared.toggleLightAndGetResponse(lightId)
+                print("✅ Toggle successful")
                 
                 // Refresh the specific light state to get updated status from server
+                print("📡 Fetching updated state: GET /lights/\(lightId)")
                 let updatedLight = try await SmartRoomAPIService.shared.getLightById(lightId)
+                print("✅ Updated light state: \(updatedLight)")
                 
                 // Update UI state with actual server response
                 await MainActor.run {
@@ -113,10 +210,13 @@ class RoomDetailViewModel: ObservableObject {
                 }
                 
             } catch {
-                print("API error when toggling light \(lightId): \(error.localizedDescription)")
+                print("❌ [TOGGLE LIGHT] Error for Light ID \(lightId)")
+                print("   Error: \(error)")
+                print("   Localized: \(error.localizedDescription)")
                 
                 // Check if it's a token expiry error
                 if let apiError = error as? SmartRoomAPIError, apiError == .tokenExpired {
+                    print("   → Token expired")
                     await MainActor.run {
                         uiState.togglingLightIds.remove(lightId)
                     }
@@ -179,19 +279,28 @@ class RoomDetailViewModel: ObservableObject {
     func toggleAC(_ acId: Int) {
         guard let index = uiState.airConditioners.firstIndex(where: { $0.id == acId }) else { return }
         
+        print("\n❄️ [TOGGLE AC] AC ID: \(acId)")
+        
         // Add to toggling set
         uiState.togglingACIds.insert(acId)
         
         // Toggle state immediately
         uiState.airConditioners[index].isOn.toggle()
         let newState = uiState.airConditioners[index].isOn
+        let power = newState ? "ON" : "OFF"
+        
+        print("   New State: \(power)")
         
         Task {
-            let power = newState ? "ON" : "OFF"
             do {
+                print("📡 Calling: PUT /air-conditions/\(acId)")
+                print("   Body: {\"power\": \"\(power)\"}")
                 _ = try await SmartRoomAPIService.shared.updateAirCondition(acId, power: power)
+                print("✅ AC toggle successful")
             } catch {
-                print("Failed to toggle AC: \(error.localizedDescription)")
+                print("❌ [TOGGLE AC] Error for AC ID \(acId)")
+                print("   Error: \(error)")
+                print("   Localized: \(error.localizedDescription)")
             }
             
             // Remove from toggling set
@@ -205,6 +314,9 @@ class RoomDetailViewModel: ObservableObject {
     func toggleFan(_ fanId: Int) {
         guard let fan = uiState.fans.first(where: { $0.id == fanId }) else { return }
         let newPower = fan.power == "ON" ? "OFF" : "ON"
+        print("\n🌀 [TOGGLE FAN] Fan ID: \(fanId)")
+        print("   Current Power: \(fan.power)")
+        print("   New Power: \(newPower)")
         sendFanControl(fanId, request: FanControlRequest(power: newPower))
     }
     
@@ -238,49 +350,40 @@ class RoomDetailViewModel: ObservableObject {
     }
 
     private func sendFanControl(_ fanId: Int, request: FanControlRequest) {
-        guard let fanIndex = uiState.fans.firstIndex(where: { $0.id == fanId }) else { return }
-        let originalFan = uiState.fans[fanIndex]
-        let fan = originalFan
+        guard let fan = uiState.fans.first(where: { $0.id == fanId }) else { return }
 
+        print("📡 [FAN CONTROL] Sending request")
+        print("   Fan ID: \(fanId)")
+        print("   Natural ID: \(fan.naturalId)")
+        print("   Request: \(request)")
+        
         uiState.togglingFanIds.insert(fanId)
-        applyLocalFanControl(fanId, request: request)
 
         Task {
             do {
+                print("📡 Calling: POST /fans/control/\(fan.naturalId)")
                 try await SmartRoomAPIService.shared.controlFan(fan.naturalId, request: request)
-            } catch {
-                print("Failed to control fan \(fanId): \(error.localizedDescription)")
+                print("✅ Fan control successful")
+                
+                print("📡 Fetching updated state: GET /fans/\(fanId)")
+                let updatedFan = try await SmartRoomAPIService.shared.getFanById(fanId)
+                print("✅ Updated fan state: \(updatedFan)")
+
                 await MainActor.run {
-                    if let rollbackIndex = uiState.fans.firstIndex(where: { $0.id == fanId }) {
-                        uiState.fans[rollbackIndex] = originalFan
+                    if let refreshedIndex = uiState.fans.firstIndex(where: { $0.id == fanId }) {
+                        uiState.fans[refreshedIndex] = updatedFan
                     }
                 }
+            } catch {
+                print("❌ [FAN CONTROL] Error for Fan ID \(fanId)")
+                print("   Error: \(error)")
+                print("   Localized: \(error.localizedDescription)")
             }
 
             await MainActor.run {
                 uiState.togglingFanIds.remove(fanId)
             }
         }
-    }
-
-    private func applyLocalFanControl(_ fanId: Int, request: FanControlRequest) {
-        guard let index = uiState.fans.firstIndex(where: { $0.id == fanId }) else { return }
-        let fan = uiState.fans[index]
-
-        uiState.fans[index] = FanDevice(
-            id: fan.id,
-            naturalId: fan.naturalId,
-            name: fan.name,
-            description: fan.description,
-            isActive: fan.isActive,
-            roomId: fan.roomId,
-            power: request.power ?? fan.power,
-            type: fan.type,
-            speed: request.speed ?? fan.speed,
-            mode: request.mode ?? fan.mode,
-            swing: request.swing ?? fan.swing,
-            light: request.light ?? fan.light
-        )
     }
     
     // Refresh all fans
@@ -326,9 +429,10 @@ struct RoomDetailScreen: View {
         }
         .navigationBarHidden(true)
         .onAppear {
-            // Keep lightweight refresh only for AC when returning from AC detail.
+            // Reload ACs when returning from ACDetailScreen
             if !viewModel.uiState.isLoading {
                 viewModel.reloadACs()
+                viewModel.refreshAllFansData()
             }
         }
     }
@@ -455,7 +559,7 @@ struct RoomDetailScreen: View {
                     Spacer()
                 }
                 .padding(.vertical, 24)
-            } else if viewModel.uiState.lights.isEmpty && viewModel.uiState.airConditioners.isEmpty && viewModel.uiState.fans.isEmpty {
+            } else if viewModel.uiState.lights.isEmpty && viewModel.uiState.airConditioners.isEmpty && viewModel.uiState.fans.isEmpty && viewModel.uiState.temperatureSensors.isEmpty {
                 Text("No devices found")
                     .foregroundColor(AppColors.textSecondary)
             } else {
@@ -489,6 +593,11 @@ struct RoomDetailScreen: View {
                         onLightChange: { viewModel.setFanLight(fan.id, $0) },
                         isToggling: viewModel.uiState.togglingFanIds.contains(fan.id)
                     )
+                }
+                
+                // Temperature Sensors
+                ForEach(viewModel.uiState.temperatureSensors) { sensor in
+                    TemperatureSensorCard(sensor: sensor)
                 }
             }
         }
@@ -594,7 +703,7 @@ struct RoomDetailScreen: View {
                             .foregroundColor(AppColors.textPrimary)
                         
                         HStack(spacing: 6) {
-                            Text("\(light.level)%")
+                            Text("\(light.level ?? 0)%")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(AppColors.primaryPurple)
                             
@@ -726,8 +835,6 @@ struct RoomDetailScreen: View {
         let isToggling: Bool
         @State private var isExpanded: Bool = false
         @State private var selectedMode: String = "NORMAL"
-        @State private var speedValue: Double = 0
-        @State private var isEditingSpeed = false
         @State private var swingEnabled: Bool = false
         @State private var lightEnabled: Bool = false
         
@@ -910,7 +1017,7 @@ struct RoomDetailScreen: View {
                                         
                                         Spacer()
                                         
-                                        Text("Mức \(Int(speedValue))")
+                                        Text("Mức \(fan.speed ?? 0)")
                                             .font(.system(size: 13, weight: .medium))
                                             .foregroundColor(.white)
                                             .padding(.horizontal, 12)
@@ -919,21 +1026,14 @@ struct RoomDetailScreen: View {
                                             .cornerRadius(12)
                                     }
                                     
-                                    Slider(
-                                        value: $speedValue,
-                                        in: 0...6,
-                                        step: 1,
-                                        onEditingChanged: { isEditing in
-                                            isEditingSpeed = isEditing
-                                            if !isEditing {
-                                                let committedSpeed = Int(speedValue.rounded())
-                                                speedValue = Double(committedSpeed)
-                                                onSpeedChange(committedSpeed)
-                                            }
+                                    Slider(value: Binding(
+                                        get: { Double(fan.speed ?? 0) },
+                                        set: { newValue in
+                                            let speed = Int(newValue)
+                                            onSpeedChange(speed)
                                         }
-                                    )
+                                    ), in: 0...6, step: 1)
                                     .accentColor(Color(red: 0.0, green: 0.65, blue: 0.75))
-                                    .disabled(isToggling)
                                 }
                                 
                                 // Swing toggle
@@ -1001,17 +1101,11 @@ struct RoomDetailScreen: View {
             )
             .onAppear {
                 selectedMode = fan.mode?.uppercased() ?? "NORMAL"
-                speedValue = Double(fan.speed ?? 0)
                 swingEnabled = fan.swing?.uppercased() == "ON"
                 lightEnabled = fan.light?.uppercased() == "ON"
             }
             .onChange(of: fan.mode) { _, newValue in
                 selectedMode = newValue?.uppercased() ?? "NORMAL"
-            }
-            .onChange(of: fan.speed) { _, newValue in
-                if !isEditingSpeed {
-                    speedValue = Double(newValue ?? 0)
-                }
             }
             .onChange(of: fan.swing) { _, newValue in
                 swingEnabled = newValue?.uppercased() == "ON"
@@ -1037,6 +1131,79 @@ struct RoomDetailScreen: View {
             case "NATURAL": return "Natural"
             default: return "Normal"
             }
+        }
+    }
+    
+    // MARK: - Temperature Sensor Card
+    struct TemperatureSensorCard: View {
+        let sensor: TemperatureSensor
+        
+        var body: some View {
+            HStack(spacing: 15) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(AppColors.surfaceWhite)
+                        .frame(width: 50, height: 50)
+                        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+                    
+                    Image(systemName: "thermometer.medium")
+                        .font(.system(size: 22))
+                        .foregroundColor(sensor.isActive ? Color(red: 1.0, green: 0.4, blue: 0.4) : AppColors.textSecondary)
+                }
+                
+                // Info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(sensor.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppColors.textPrimary)
+                    
+                    HStack(spacing: 8) {
+                        // Active status
+                        Circle()
+                            .fill(sensor.isActive ? Color.green : AppColors.textSecondary)
+                            .frame(width: 6, height: 6)
+                        
+                        Text(sensor.isActive ? "Active" : "Inactive")
+                            .font(.system(size: 13))
+                            .foregroundColor(AppColors.textSecondary)
+                        
+                        if let description = sensor.description {
+                            Text("•")
+                                .foregroundColor(AppColors.textSecondary)
+                            
+                            Text(description)
+                                .font(.system(size: 13))
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                // Temperature Display
+                VStack(alignment: .trailing, spacing: 2) {
+                    if let temp = sensor.currentValue {
+                        Text(String(format: "%.1f°C", temp))
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(AppColors.primaryPurple)
+                    } else {
+                        Text("--°C")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                    
+                    Text("ID: \(sensor.naturalId)")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppColors.textSecondary)
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(AppColors.surfaceWhite)
+                    .shadow(color: AppColors.textSecondary.opacity(0.1), radius: 6, x: 0, y: 3)
+            )
         }
     }
     
